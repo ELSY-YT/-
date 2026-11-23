@@ -12,8 +12,8 @@ android {
         applicationId = "com.jarvis.app"
         minSdk = 26
         targetSdk = 34          // 34, not 35: keeps the classic status bar instead of forced edge-to-edge
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
         ndk { abiFilters += listOf("arm64-v8a") }   // llama.cpp needs a 64-bit phone
         externalNativeBuild {
             cmake {

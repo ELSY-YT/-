@@ -46,14 +46,53 @@ object Jarvis {
         brain = Brain(store)
         actions = Actions(app, store) { say(it) }
         hands = Hands({ llm() }, actions, { prefs.handsSteps }, { prefs.backend == "local" && "0.5B" in prefs.localModel })
-        tts = TextToSpeech(app) { st ->
-            if (st == TextToSpeech.SUCCESS) { tts?.language = Locale("ru", "RU"); ttsReady = true }
-        }
+        initTts()
         if (Build.VERSION.SDK_INT >= 26) {
             (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                 .createNotificationChannel(NotificationChannel(CH, "Джарвис работает", NotificationManager.IMPORTANCE_LOW))
         }
         inited = true
+    }
+
+    /** (Re)creates the speech engine with the chosen engine, voice, pitch and rate. */
+    fun initTts() {
+        ttsReady = false
+        tts?.shutdown()
+        val listener = TextToSpeech.OnInitListener { st -> if (st == TextToSpeech.SUCCESS) { applyVoice(); ttsReady = true } }
+        tts = if (prefs.ttsEngine.isBlank()) TextToSpeech(app, listener) else TextToSpeech(app, listener, prefs.ttsEngine)
+    }
+
+    fun applyVoice() {
+        val t = tts ?: return
+        t.language = Locale("ru", "RU")
+        if (prefs.voiceName.isNotBlank()) runCatching { t.voices?.firstOrNull { it.name == prefs.voiceName }?.let { t.voice = it } }
+        t.setPitch(prefs.voicePitch)
+        t.setSpeechRate(prefs.voiceRate)
+    }
+
+    /** Russian voices of the current engine, for the settings screen. */
+    fun voicesJson(): org.json.JSONArray {
+        val arr = org.json.JSONArray()
+        runCatching {
+            tts?.voices?.filter { it.locale.language == "ru" }?.sortedBy { it.name }?.forEach {
+                arr.put(JSONObject().put("name", it.name).put("net", it.isNetworkConnectionRequired)
+                    .put("q", it.quality).put("male", it.name.contains("male", true) && !it.name.contains("female", true)))
+            }
+        }
+        return arr
+    }
+
+    fun enginesJson(): org.json.JSONArray {
+        val arr = org.json.JSONArray()
+        runCatching { tts?.engines?.forEach { arr.put(JSONObject().put("pkg", it.name).put("label", it.label)) } }
+        return arr
+    }
+
+    fun testVoice() {
+        if (!ttsReady) return
+        applyVoice()
+        tts?.speak(if (prefs.sir) "Все системы в норме, сэр. Чем могу помочь?" else "Все системы в норме. Чем могу помочь?",
+            TextToSpeech.QUEUE_FLUSH, null, "test")
     }
 
     fun llm(): Llm = if (prefs.backend == "ollama") OllamaLlm(prefs) else LocalLlm(prefs)
@@ -64,8 +103,11 @@ object Jarvis {
         listener?.invoke(o)
     }
 
-    fun say(text: String) {
-        if (text.isBlank()) return
+    fun say(raw: String) {
+        if (raw.isBlank()) return
+        // Jarvis manner: short replies end with "сэр"
+        val text = if (prefs.sir && raw.length < 70 && !raw.contains("сэр", true) && raw.trimEnd().last() in ".!")
+            raw.trimEnd().dropLast(1) + ", сэр" + raw.trimEnd().last() else raw
         emit("say", "text" to text)
         if (prefs.speak && ttsReady) tts?.speak(text, TextToSpeech.QUEUE_ADD, null, "j" + System.nanoTime())
     }

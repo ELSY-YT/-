@@ -187,7 +187,13 @@ class MainActivity : Activity() {
         @JavascriptInterface fun notes(): String = Jarvis.actions.notesJson().toString()
 
         @JavascriptInterface fun prefs(): String = Jarvis.prefs.toJson().toString()
-        @JavascriptInterface fun setPref(key: String, value: String) = Jarvis.prefs.set(key, value)
+        @JavascriptInterface fun setPref(key: String, value: String) {
+            Jarvis.prefs.set(key, value)
+            if (key == "ttsEngine") Jarvis.initTts() else if (key.startsWith("voice")) Jarvis.applyVoice()
+        }
+        @JavascriptInterface fun voices(): String = Jarvis.voicesJson().toString()
+        @JavascriptInterface fun engines(): String = Jarvis.enginesJson().toString()
+        @JavascriptInterface fun testVoice() = Jarvis.testVoice()
         @JavascriptInterface fun models(): String = Jarvis.models.state().toString()
         @JavascriptInterface fun download(id: String): String = Jarvis.models.download(id) ?: ""
         @JavascriptInterface fun cancelDownload() = Jarvis.models.cancel()

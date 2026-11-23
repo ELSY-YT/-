@@ -5,66 +5,100 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Джарвис</title>
 <style>
-:root{--bg:#05080f;--card:#0c1320;--line:#16243a;--text:#dbe9f7;--dim:#7d93ab;--acc:#4fd2ff;--acc2:#9be9ff;--bad:#ff6b6b;--ok:#4ade80}
+:root{--bg:#02060c;--card:rgba(8,22,38,.72);--line:rgba(79,210,255,.22);--text:#dff4ff;--dim:#6f8fa8;--acc:#4fd2ff;--acc2:#a8eeff;--gold:#ffb340;--red:#ff3d3d;--bad:#ff6b6b;--ok:#5dffb0}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,Roboto,sans-serif}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Roboto,sans-serif}
+body:before{content:'';position:fixed;inset:0;z-index:-2;background:
+  radial-gradient(70% 45% at 50% 18%,rgba(79,210,255,.18),transparent 70%),
+  radial-gradient(60% 40% at 50% 110%,rgba(255,179,64,.10),transparent 70%),var(--bg)}
+body:after{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(rgba(79,210,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(79,210,255,.06) 1px,transparent 1px);
+  background-size:26px 26px;-webkit-mask-image:radial-gradient(circle at 50% 25%,#000 0,transparent 70%);mask-image:radial-gradient(circle at 50% 25%,#000 0,transparent 70%)}
 button,input,select,textarea{font:inherit;color:inherit}
+.mono,header b,.card h3,label,nav button,#partial,.st{font-family:ui-monospace,'Roboto Mono',Consolas,monospace}
 .app{display:flex;flex-direction:column;height:100%}
-header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
-header img{width:30px;height:30px;border-radius:50%}
-header b{font-size:17px;letter-spacing:.5px}
-header .st{margin-left:auto;font-size:12px;color:var(--dim)}
-main{flex:1;overflow:auto;padding:12px 14px 20px}
-nav{display:flex;border-top:1px solid var(--line);background:#070c16}
-nav button{flex:1;background:none;border:0;padding:10px 0 12px;color:var(--dim);font-size:13px}
-nav button.on{color:var(--acc)}
-nav button span{display:block;font-size:19px}
-.tab{display:none}.tab.on{display:block}
+header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(2,6,12,.75);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+header img{width:30px;height:30px;border-radius:50%;box-shadow:0 0 14px var(--acc)}
+header b{font-size:17px;letter-spacing:.35em;color:#fff;text-shadow:0 0 10px var(--acc)}
+header .st{margin-left:auto;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc);display:flex;align-items:center;gap:6px}
+header .st:before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+main{flex:1;overflow:auto;padding:12px 16px 20px}
+nav{display:flex;border-top:1px solid var(--line);background:rgba(3,10,18,.92)}
+nav button{flex:1;background:none;border:0;padding:10px 0 12px;color:var(--dim);font-size:11px;letter-spacing:.14em;text-transform:uppercase;position:relative}
+nav button.on{color:var(--acc);text-shadow:0 0 8px var(--acc)}
+nav button.on:after{content:'';position:absolute;top:0;left:32%;right:32%;height:2px;background:var(--acc);box-shadow:0 0 10px var(--acc)}
+nav button span{display:block;font-size:19px;margin-bottom:2px}
+.tab{display:none}.tab.on{display:block;animation:in .3s ease}
+@keyframes in{from{opacity:0;transform:translateY(6px)}}
 /* chat */
-#log{display:flex;flex-direction:column;gap:8px;min-height:40vh}
-.m{max-width:86%;padding:8px 11px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word}
-.m.u{align-self:flex-end;background:#12304a}
-.m.j{align-self:flex-start;background:var(--card);border:1px solid var(--line)}
-.m.s{align-self:flex-start;font-size:12.5px;color:var(--dim);padding:2px 6px}
-.m.e{align-self:flex-start;background:#2a1215;border:1px solid #4a1f25;color:#ffb3b3}
+#log{display:flex;flex-direction:column;gap:8px;min-height:30vh}
+.m{max-width:86%;padding:9px 12px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word;animation:in .25s ease}
+.m.u{align-self:flex-end;background:linear-gradient(135deg,rgba(255,179,64,.22),rgba(255,61,61,.18));border:1px solid rgba(255,179,64,.35)}
+.m.j{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-left:2px solid var(--acc);box-shadow:0 0 18px rgba(79,210,255,.08)}
+.m.s{align-self:flex-start;font:12px ui-monospace,monospace;color:var(--acc);padding:2px 6px;opacity:.85}
+.m.s:before{content:'▸ '}
+.m.e{align-self:flex-start;background:rgba(60,10,14,.7);border:1px solid #6a2430;color:#ffb3b3}
 .m.h{align-self:center;font-size:12.5px;color:var(--dim)}
-.orbwrap{display:flex;flex-direction:column;align-items:center;margin:18px 0 6px}
-#orb{width:92px;height:92px;border-radius:50%;border:0;background:radial-gradient(circle at 50% 50%,#d2f8ff 0 22%,#4fd2ff 23% 30%,#0b2236 31% 60%,#4fd2ff 61% 66%,#05080f 67%);box-shadow:0 0 28px #4fd2ff66;transition:transform .12s}
+/* arc reactor */
+.orbwrap{display:flex;flex-direction:column;align-items:center;margin:16px 0 6px}
+.reactor{position:relative;width:200px;height:200px;display:grid;place-items:center}
+.ring{position:absolute;border-radius:50%;pointer-events:none}
+.r1{inset:0;border:1px solid rgba(79,210,255,.25);box-shadow:inset 0 0 30px rgba(79,210,255,.08)}
+.r2{inset:10px;border:2px dashed rgba(79,210,255,.55);animation:spin 18s linear infinite}
+.r3{inset:24px;border:3px solid transparent;border-top-color:var(--acc);border-bottom-color:var(--acc);animation:spin 6s linear infinite reverse;filter:drop-shadow(0 0 6px var(--acc))}
+.r4{inset:36px;border:1px dotted rgba(255,179,64,.7);animation:spin 30s linear infinite}
+.ticks{inset:2px;background:repeating-conic-gradient(rgba(79,210,255,.55) 0 1deg,transparent 1deg 10deg);
+  -webkit-mask:radial-gradient(circle,transparent 62%,#000 63%,#000 67%,transparent 68%);mask:radial-gradient(circle,transparent 62%,#000 63%,#000 67%,transparent 68%);animation:spin 60s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#orb{position:relative;width:104px;height:104px;border-radius:50%;border:0;cursor:pointer;
+  background:radial-gradient(circle at 50% 50%,#fff 0 12%,#c8f6ff 16%,#4fd2ff 30%,#0a3a5a 46%,#06243a 58%,#4fd2ff 60% 63%,#031522 66%);
+  box-shadow:0 0 30px rgba(79,210,255,.7),0 0 70px rgba(79,210,255,.35),inset 0 0 18px rgba(255,255,255,.4);transition:transform .12s}
+#orb:after{content:'';position:absolute;inset:18px;border-radius:50%;
+  background:repeating-conic-gradient(rgba(2,6,12,.7) 0 8deg,transparent 8deg 36deg);-webkit-mask:radial-gradient(circle,transparent 40%,#000 41%,#000 70%,transparent 71%);mask:radial-gradient(circle,transparent 40%,#000 41%,#000 70%,transparent 71%)}
 #orb.on{animation:pulse 1s infinite}
-@keyframes pulse{50%{box-shadow:0 0 48px #4fd2ffcc}}
-#partial{min-height:20px;color:var(--acc2);font-size:13px;margin-top:8px;text-align:center}
-.bar{position:sticky;bottom:0;display:flex;gap:8px;padding-top:10px;background:var(--bg)}
-.bar input{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;outline:none}
-.btn{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 13px}
-.btn.p{background:#0f3a55;border-color:#1d5b82;color:#dff6ff}
-.btn.r{background:#3a1218;border-color:#6a2430;color:#ffd1d1}
-.btn.s{padding:5px 9px;font-size:13px;border-radius:9px}
-.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:20px;border:1px solid var(--line);font-size:13px;color:var(--dim);background:var(--card)}
-.chip.on{color:#001018;background:var(--acc);border-color:var(--acc)}
+#orb.on~.ring,.reactor.on .r3{animation-duration:1.5s}
+@keyframes pulse{50%{box-shadow:0 0 50px rgba(79,210,255,1),0 0 110px rgba(79,210,255,.55),inset 0 0 22px #fff}}
+#partial{min-height:20px;color:var(--acc2);font-size:12px;letter-spacing:.08em;margin-top:10px;text-align:center;text-transform:uppercase}
+.bar{position:sticky;bottom:0;display:flex;gap:8px;padding:10px 0 2px;background:linear-gradient(transparent,var(--bg) 30%)}
+.bar input{flex:1;background:rgba(4,14,26,.9);border:1px solid var(--line);border-radius:12px;padding:11px 13px;outline:none}
+.bar input:focus,.in:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(79,210,255,.12)}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 13px}
+.btn.p{background:linear-gradient(135deg,rgba(79,210,255,.35),rgba(79,210,255,.15));border-color:var(--acc);color:#fff;box-shadow:0 0 14px rgba(79,210,255,.25)}
+.btn.r{background:rgba(60,10,14,.8);border-color:#7a2430;color:#ffd1d1}
+.btn.s{padding:6px 10px;font-size:13px;border-radius:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1px solid var(--line);font-size:13px;color:var(--dim);background:var(--card);cursor:pointer}
+.chip.on{color:#001018;background:var(--acc);border-color:var(--acc);box-shadow:0 0 14px rgba(79,210,255,.45)}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
-.card h3{margin:0 0 8px;font-size:15px}
+.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px;margin:12px 0;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.card:before,.card:after{content:'';position:absolute;width:12px;height:12px;border:2px solid var(--acc);pointer-events:none}
+.card:before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.card:after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+.card h3{margin:0 0 10px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--acc)}
 .dim{color:var(--dim);font-size:13px}
 .steps{margin:6px 0 0;padding-left:18px;font-size:13.5px}
-label{display:block;font-size:13px;color:var(--dim);margin:8px 0 4px}
-.in{width:100%;background:#08101c;border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none}
+label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:10px 0 4px}
+.in{width:100%;background:rgba(2,8,16,.9);border:1px solid var(--line);border-radius:8px;padding:9px 11px;outline:none}
+input[type=range]{width:100%;accent-color:var(--acc)}
 .stepedit{display:flex;gap:6px;margin:6px 0}
 .stepedit select{flex:0 0 42%}.stepedit input{flex:1}
-.perm{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
+.perm{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)}
 .perm:last-child{border:0}
 .ok{color:var(--ok)}.no{color:var(--bad)}
-progress{width:100%;height:8px}
-.new{border-color:#1d5b82}
+progress{width:100%;height:8px;accent-color:var(--acc)}
+.new{border-color:var(--gold)}.new:before,.new:after{border-color:var(--gold)}
 </style>
 </head>
 <body>
 <div class="app">
-  <header><img src="icon-192.png" alt=""><b>ДЖАРВИС</b><span class="st" id="st">готов</span></header>
+  <header><img src="icon-192.png" alt=""><b>ДЖАРВИС</b><span class="st" id="st">онлайн</span></header>
   <main>
     <!-- ===== chat ===== -->
     <section class="tab on" id="t-chat">
       <div class="orbwrap">
-        <button id="orb" aria-label="Говорить"></button>
+        <div class="reactor" id="reactor">
+          <div class="ring r1"></div><div class="ring ticks"></div><div class="ring r2"></div><div class="ring r3"></div><div class="ring r4"></div>
+          <button id="orb" aria-label="Говорить"></button>
+        </div>
         <div id="partial">Нажми и говори</div>
       </div>
       <div class="row" style="justify-content:center;margin-bottom:10px">
@@ -143,6 +177,21 @@ progress{width:100%;height:8px}
       </div>
 
       <div class="card">
+        <h3>Голос</h3>
+        <div class="row"><span class="chip" id="sirChip">🎩 Обращаться «сэр»</span></div>
+        <label>Движок речи</label>
+        <select class="in" id="ttsEngine"></select>
+        <label>Голос</label>
+        <select class="in" id="voiceName"></select>
+        <label>Тон: <span id="pitchV"></span></label>
+        <input type="range" id="voicePitch" min="0.5" max="1.5" step="0.05">
+        <label>Скорость: <span id="rateV"></span></label>
+        <input type="range" id="voiceRate" min="0.6" max="1.6" step="0.05">
+        <div class="row" style="margin-top:10px"><button class="btn p s" onclick="J.testVoice()">▶ Проверить голос</button></div>
+        <div class="dim" style="margin-top:8px">Нужен свой голос? Поставь любой TTS-движок для Android (например, RHVoice), выбери его здесь, и Джарвис будет говорить им.</div>
+      </div>
+
+      <div class="card">
         <h3>Быстрый вызов</h3>
         <div class="dim">Опусти шторку → ✏️ изменить плитки → перетащи плитку «Джарвис». Нажатие сразу включает микрофон. Ещё можно долго нажать кнопку на гарнитуре.</div>
       </div>
@@ -194,11 +243,11 @@ window.onJ = function (s) {
     case 'error': add('e', e.text); break;
     case 'hint': $('#partial').textContent = e.text; break;
     case 'partial': $('#partial').textContent = e.text; break;
-    case 'listening': $('#orb').classList.toggle('on', e.on); if (e.on) $('#partial').textContent = 'Слушаю…'; break;
+    case 'listening': $('#orb').classList.toggle('on', e.on); $('#reactor').classList.toggle('on', e.on); if (e.on) $('#partial').textContent = 'Слушаю…'; break;
     case 'rms': $('#orb').style.transform = 'scale(' + (1 + Math.max(0, Math.min(10, e.v)) / 60) + ')'; break;
     case 'busy':
       busy = e.on; $('#stopBtn').style.display = e.on ? '' : 'none';
-      $('#st').textContent = e.on ? 'думаю…' : 'готов'; break;
+      $('#st').textContent = e.on ? 'обработка' : 'онлайн'; break;
     case 'new_command': showNew(e.cmd); break;
     case 'commands': renderCmds(); break;
     case 'perms': if ($('#t-set').classList.contains('on')) renderPerms(); break;
@@ -320,6 +369,7 @@ function renderSettings() {
   $('#localBox').style.display = local ? '' : 'none'; $('#ollamaBox').style.display = local ? 'none' : '';
   ['threads', 'nCtx', 'ollamaUrl', 'ollamaModel', 'handsSteps'].forEach(k => $('#' + k).value = p[k]);
   $('#speakChip').classList.toggle('on', p.speak);
+  renderVoice(p);
   renderPerms(); if (renderModels()) pollModels();
 }
 $('#bLocal').onclick = () => { J.setPref('backend', 'local'); renderSettings(); };
@@ -327,10 +377,28 @@ $('#bOllama').onclick = () => { J.setPref('backend', 'ollama'); renderSettings()
 $('#speakChip').onclick = () => { J.setPref('speak', String(!$('#speakChip').classList.contains('on'))); renderSettings(); };
 ['threads', 'nCtx', 'ollamaUrl', 'ollamaModel', 'handsSteps'].forEach(k => $('#' + k).onchange = e => J.setPref(k, e.target.value));
 
+// ---------- voice ----------
+function renderVoice(p) {
+  $('#sirChip').classList.toggle('on', p.sir);
+  $('#voicePitch').value = p.voicePitch; $('#pitchV').textContent = (+p.voicePitch).toFixed(2);
+  $('#voiceRate').value = p.voiceRate; $('#rateV').textContent = (+p.voiceRate).toFixed(2);
+  let eng = []; try { eng = JSON.parse(J.engines()); } catch (e) {}
+  $('#ttsEngine').innerHTML = '<option value="">По умолчанию в системе</option>' + eng.map(x => '<option value="' + esc(x.pkg) + '">' + esc(x.label) + '</option>').join('');
+  $('#ttsEngine').value = p.ttsEngine || '';
+  let vs = []; try { vs = JSON.parse(J.voices()); } catch (e) {}
+  $('#voiceName').innerHTML = '<option value="">По умолчанию</option>' + vs.map(v => '<option value="' + esc(v.name) + '">' + esc(v.name) + (v.male ? ' · мужской' : '') + (v.net ? ' · онлайн' : '') + '</option>').join('');
+  $('#voiceName').value = p.voiceName || '';
+}
+$('#sirChip').onclick = () => { J.setPref('sir', String(!$('#sirChip').classList.contains('on'))); renderSettings(); };
+$('#voicePitch').oninput = e => $('#pitchV').textContent = (+e.target.value).toFixed(2);
+$('#voiceRate').oninput = e => $('#rateV').textContent = (+e.target.value).toFixed(2);
+['voicePitch', 'voiceRate', 'voiceName'].forEach(k => $('#' + k).onchange = e => J.setPref(k, e.target.value));
+$('#ttsEngine').onchange = e => { J.setPref('ttsEngine', e.target.value); setTimeout(renderSettings, 1500); };
+
 // first launch: no model yet
 (function () {
   const m = JSON.parse(J.models()), p = JSON.parse(J.prefs());
-  add('j', 'Привет, я Джарвис. Нажми на круг и скажи, что сделать: «включи фонарик», «будильник на 7:30», «открой ютуб и сделай громкость 50». Начни со слова «сам», и я попробую сделать задачу прямо на экране.');
+  add('j', 'Джарвис на связи, к вашим услугам. Нажми на круг и скажи, что сделать: «включи фонарик», «будильник на 7:30», «открой ютуб и сделай громкость 50». Начни со слова «сам», и я попробую сделать задачу прямо на экране.');
   if (p.backend === 'local' && !m.current) add('e', 'Сначала скачай модель: Настройки → Мозг → «Умнее: 1.5b».');
 })();
 </script>
