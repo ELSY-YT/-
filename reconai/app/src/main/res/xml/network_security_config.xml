@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- plain http is needed for the built-in server (127.0.0.1) and for Ollama on a PC in the local network -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

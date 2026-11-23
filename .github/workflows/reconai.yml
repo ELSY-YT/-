@@ -1,0 +1,26 @@
+name: ReconAI APK
+on:
+  push:
+    paths: ['reconai/**', '.github/workflows/reconai.yml']
+  workflow_dispatch:
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reconai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReconAI-apk
+          path: reconai/app/build/outputs/apk/release/*.apk

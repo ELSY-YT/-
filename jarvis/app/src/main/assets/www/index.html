@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Джарвис</title>
+<style>
+:root{--bg:#05080f;--card:#0c1320;--line:#16243a;--text:#dbe9f7;--dim:#7d93ab;--acc:#4fd2ff;--acc2:#9be9ff;--bad:#ff6b6b;--ok:#4ade80}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,Roboto,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+header img{width:30px;height:30px;border-radius:50%}
+header b{font-size:17px;letter-spacing:.5px}
+header .st{margin-left:auto;font-size:12px;color:var(--dim)}
+main{flex:1;overflow:auto;padding:12px 14px 20px}
+nav{display:flex;border-top:1px solid var(--line);background:#070c16}
+nav button{flex:1;background:none;border:0;padding:10px 0 12px;color:var(--dim);font-size:13px}
+nav button.on{color:var(--acc)}
+nav button span{display:block;font-size:19px}
+.tab{display:none}.tab.on{display:block}
+/* chat */
+#log{display:flex;flex-direction:column;gap:8px;min-height:40vh}
+.m{max-width:86%;padding:8px 11px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word}
+.m.u{align-self:flex-end;background:#12304a}
+.m.j{align-self:flex-start;background:var(--card);border:1px solid var(--line)}
+.m.s{align-self:flex-start;font-size:12.5px;color:var(--dim);padding:2px 6px}
+.m.e{align-self:flex-start;background:#2a1215;border:1px solid #4a1f25;color:#ffb3b3}
+.m.h{align-self:center;font-size:12.5px;color:var(--dim)}
+.orbwrap{display:flex;flex-direction:column;align-items:center;margin:18px 0 6px}
+#orb{width:92px;height:92px;border-radius:50%;border:0;background:radial-gradient(circle at 50% 50%,#d2f8ff 0 22%,#4fd2ff 23% 30%,#0b2236 31% 60%,#4fd2ff 61% 66%,#05080f 67%);box-shadow:0 0 28px #4fd2ff66;transition:transform .12s}
+#orb.on{animation:pulse 1s infinite}
+@keyframes pulse{50%{box-shadow:0 0 48px #4fd2ffcc}}
+#partial{min-height:20px;color:var(--acc2);font-size:13px;margin-top:8px;text-align:center}
+.bar{position:sticky;bottom:0;display:flex;gap:8px;padding-top:10px;background:var(--bg)}
+.bar input{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;outline:none}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 13px}
+.btn.p{background:#0f3a55;border-color:#1d5b82;color:#dff6ff}
+.btn.r{background:#3a1218;border-color:#6a2430;color:#ffd1d1}
+.btn.s{padding:5px 9px;font-size:13px;border-radius:9px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:20px;border:1px solid var(--line);font-size:13px;color:var(--dim);background:var(--card)}
+.chip.on{color:#001018;background:var(--acc);border-color:var(--acc)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
+.card h3{margin:0 0 8px;font-size:15px}
+.dim{color:var(--dim);font-size:13px}
+.steps{margin:6px 0 0;padding-left:18px;font-size:13.5px}
+label{display:block;font-size:13px;color:var(--dim);margin:8px 0 4px}
+.in{width:100%;background:#08101c;border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none}
+.stepedit{display:flex;gap:6px;margin:6px 0}
+.stepedit select{flex:0 0 42%}.stepedit input{flex:1}
+.perm{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
+.perm:last-child{border:0}
+.ok{color:var(--ok)}.no{color:var(--bad)}
+progress{width:100%;height:8px}
+.new{border-color:#1d5b82}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><img src="icon-192.png" alt=""><b>ДЖАРВИС</b><span class="st" id="st">готов</span></header>
+  <main>
+    <!-- ===== chat ===== -->
+    <section class="tab on" id="t-chat">
+      <div class="orbwrap">
+        <button id="orb" aria-label="Говорить"></button>
+        <div id="partial">Нажми и говори</div>
+      </div>
+      <div class="row" style="justify-content:center;margin-bottom:10px">
+        <span class="chip" id="handsChip">🖐 Сам на экране</span>
+        <button class="btn r s" id="stopBtn" style="display:none">⏹ Стоп</button>
+      </div>
+      <div id="log"></div>
+      <div class="bar">
+        <input id="msg" placeholder="Например: включи фонарик и открой ютуб" autocomplete="off">
+        <button class="btn p" id="sendBtn">➤</button>
+      </div>
+    </section>
+
+    <!-- ===== commands ===== -->
+    <section class="tab" id="t-cmd">
+      <div class="card">
+        <h3>Свои команды</h3>
+        <div class="dim">Скажи «создай команду кино: громкость 70, не беспокоить и открой ютуб». Джарвис соберёт её сам и спросит, сохранить ли. Можно и вручную.</div>
+        <div class="row" style="margin-top:10px"><button class="btn p" id="newCmd">＋ Новая команда</button></div>
+      </div>
+      <div id="editor"></div>
+      <div id="cmds"></div>
+      <div class="card">
+        <h3>Что Джарвис умеет сам</h3>
+        <div id="acts" class="dim"></div>
+      </div>
+      <div class="card">
+        <h3>Заметки</h3>
+        <div id="notes" class="dim"></div>
+      </div>
+    </section>
+
+    <!-- ===== settings ===== -->
+    <section class="tab" id="t-set">
+      <div class="card">
+        <h3>Разрешения</h3>
+        <div id="perms"></div>
+        <div class="dim" style="margin-top:8px">Если «Спец. возможности» не дают включить Джарвиса (Android 13+), открой «О приложении» → ⋮ → «Разрешить ограниченные настройки», потом включи снова.</div>
+        <div class="row" style="margin-top:8px"><button class="btn s" onclick="J.perm('restricted')">О приложении</button></div>
+      </div>
+
+      <div class="card">
+        <h3>Мозг</h3>
+        <div class="row">
+          <span class="chip" id="bLocal">📱 В телефоне</span>
+          <span class="chip" id="bOllama">🖥 Ollama на ПК</span>
+        </div>
+        <div id="localBox">
+          <label>Модель</label>
+          <div id="modelState" class="dim"></div>
+          <progress id="dlp" max="100" value="0" style="display:none"></progress>
+          <div id="presets" class="row" style="margin-top:8px"></div>
+          <div id="files"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn s" onclick="J.pickModel();pollModels()">📁 Выбрать .gguf</button>
+            <button class="btn s r" id="cancelDl" style="display:none" onclick="J.cancelDownload()">Отменить загрузку</button>
+          </div>
+          <label>Потоки процессора (обычно 4)</label>
+          <input class="in" id="threads" type="number" min="1" max="8">
+          <label>Контекст (2048 для 4 ГБ)</label>
+          <input class="in" id="nCtx" type="number" min="512" max="8192" step="512">
+        </div>
+        <div id="ollamaBox" style="display:none">
+          <label>Адрес Ollama (на ПК: OLLAMA_HOST=0.0.0.0 ollama serve)</label>
+          <input class="in" id="ollamaUrl" placeholder="http://192.168.1.10:11434">
+          <label>Модель (лучше семейства qwen2.5)</label>
+          <input class="in" id="ollamaModel" placeholder="huihui_ai/qwen2.5-abliterate:7b">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Поведение</h3>
+        <div class="row"><span class="chip" id="speakChip">🔊 Отвечать голосом</span></div>
+        <label>Максимум шагов в режиме «сам»</label>
+        <input class="in" id="handsSteps" type="number" min="3" max="25">
+      </div>
+
+      <div class="card">
+        <h3>Быстрый вызов</h3>
+        <div class="dim">Опусти шторку → ✏️ изменить плитки → перетащи плитку «Джарвис». Нажатие сразу включает микрофон. Ещё можно долго нажать кнопку на гарнитуре.</div>
+      </div>
+    </section>
+  </main>
+  <nav>
+    <button class="on" data-t="chat"><span>◉</span>Джарвис</button>
+    <button data-t="cmd"><span>⚡</span>Команды</button>
+    <button data-t="set"><span>⚙</span>Настройки</button>
+  </nav>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let hands = false, busy = false, ACTS = [];
+try { ACTS = JSON.parse(J.actions()); } catch (e) {}
+
+// ---------- tabs ----------
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === 't-' + b.dataset.t));
+  if (b.dataset.t === 'cmd') renderCmds();
+  if (b.dataset.t === 'set') renderSettings();
+});
+
+// ---------- chat ----------
+function add(cls, text) {
+  const d = document.createElement('div'); d.className = 'm ' + cls; d.textContent = text;
+  $('#log').appendChild(d); d.scrollIntoView({block: 'end'}); return d;
+}
+function send() {
+  const t = $('#msg').value.trim(); if (!t) return;
+  $('#msg').value = '';
+  hands ? J.hands(t) : J.send(t);
+}
+$('#sendBtn').onclick = send;
+$('#msg').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+$('#orb').onclick = () => { if ($('#orb').classList.contains('on')) J.stopListen(); else J.listen(); };
+$('#handsChip').onclick = () => { hands = !hands; $('#handsChip').classList.toggle('on', hands); };
+$('#stopBtn').onclick = () => J.stop();
+
+window.onJ = function (s) {
+  const e = JSON.parse(s);
+  switch (e.type) {
+    case 'user': add('u', e.text); $('#partial').textContent = ''; break;
+    case 'say': add('j', e.text); break;
+    case 'step': add('s', e.text); break;
+    case 'error': add('e', e.text); break;
+    case 'hint': $('#partial').textContent = e.text; break;
+    case 'partial': $('#partial').textContent = e.text; break;
+    case 'listening': $('#orb').classList.toggle('on', e.on); if (e.on) $('#partial').textContent = 'Слушаю…'; break;
+    case 'rms': $('#orb').style.transform = 'scale(' + (1 + Math.max(0, Math.min(10, e.v)) / 60) + ')'; break;
+    case 'busy':
+      busy = e.on; $('#stopBtn').style.display = e.on ? '' : 'none';
+      $('#st').textContent = e.on ? 'думаю…' : 'готов'; break;
+    case 'new_command': showNew(e.cmd); break;
+    case 'commands': renderCmds(); break;
+    case 'perms': if ($('#t-set').classList.contains('on')) renderPerms(); break;
+  }
+};
+
+function stepsHtml(steps) {
+  return '<ol class="steps">' + steps.map(s => '<li>' + esc(s.a) + (s.v ? ' — ' + esc(s.v) : '') + '</li>').join('') + '</ol>';
+}
+
+function showNew(c) {
+  const d = document.createElement('div'); d.className = 'card new';
+  d.innerHTML = '<h3>Новая команда: ' + esc(c.name) + '</h3><div class="dim">Фразы: ' + esc((c.triggers || []).join(', ')) + '</div>' +
+    stepsHtml(c.steps || []) + '<div class="row" style="margin-top:8px"><button class="btn p s">Сохранить</button><button class="btn s">Изменить</button><button class="btn s">Отмена</button></div>';
+  const [ok, edit, no] = d.querySelectorAll('button');
+  ok.onclick = () => { J.confirm(JSON.stringify(c)); d.remove(); };
+  edit.onclick = () => { J.discard(); d.remove(); document.querySelector('nav button[data-t=cmd]').click(); openEditor(c); };
+  no.onclick = () => { J.discard(); d.remove(); add('h', 'Не сохранено'); };
+  $('#log').appendChild(d); d.scrollIntoView({block: 'end'});
+}
+
+// ---------- commands ----------
+function renderCmds() {
+  const list = JSON.parse(J.commands());
+  $('#cmds').innerHTML = list.length ? '' : '<div class="dim card">Своих команд пока нет.</div>';
+  list.forEach(c => {
+    const d = document.createElement('div'); d.className = 'card';
+    d.innerHTML = '<h3>' + esc(c.name) + '</h3><div class="dim">Фразы: ' + esc((c.triggers || []).join(', ')) + '</div>' + stepsHtml(c.steps || []) +
+      '<div class="row" style="margin-top:8px"><button class="btn p s">▶ Запустить</button><button class="btn s">✎ Изменить</button><button class="btn r s">Удалить</button></div>';
+    const [run, edit, del] = d.querySelectorAll('button');
+    run.onclick = () => { J.runCommand(c.name); document.querySelector('nav button[data-t=chat]').click(); };
+    edit.onclick = () => openEditor(c);
+    del.onclick = () => { if (confirm('Удалить «' + c.name + '»?')) { J.deleteCommand(c.name); renderCmds(); } };
+    $('#cmds').appendChild(d);
+  });
+  $('#acts').innerHTML = ACTS.map(a => '<div><b>' + esc(a.name) + '</b> — ' + esc(a.about) + (a.arg ? ' <i>(' + esc(a.arg) + ')</i>' : '') + '</div>').join('');
+  const notes = JSON.parse(J.notes());
+  $('#notes').innerHTML = notes.length ? notes.slice(-20).reverse().map(n => '<div>• ' + esc(n.text) + '</div>').join('') : 'Скажи «запиши купить хлеб».';
+}
+
+function openEditor(c) {
+  c = c || {name: '', triggers: [], steps: [{a: 'say', v: ''}]};
+  const ed = $('#editor');
+  const opts = ACTS.map(a => '<option value="' + a.name + '">' + esc(a.about) + '</option>').join('') + '<option value="run">другая моя команда</option>';
+  ed.innerHTML = '<div class="card new"><h3>' + (c.name ? 'Изменить команду' : 'Новая команда') + '</h3>' +
+    '<label>Имя</label><input class="in" id="eName" value="' + esc(c.name) + '">' +
+    '<label>Фразы запуска (через запятую)</label><input class="in" id="eTr" value="' + esc((c.triggers || []).join(', ')) + '">' +
+    '<label>Шаги</label><div id="eSteps"></div>' +
+    '<div class="row" style="margin-top:6px"><button class="btn s" id="eAdd">＋ Шаг</button></div>' +
+    '<div class="row" style="margin-top:12px"><button class="btn p" id="eSave">Сохранить</button><button class="btn" id="eCancel">Отмена</button></div><div id="eErr" class="no"></div></div>';
+  const box = $('#eSteps');
+  const addStep = s => {
+    const r = document.createElement('div'); r.className = 'stepedit';
+    r.innerHTML = '<select class="in">' + opts + '</select><input class="in" placeholder="значение"><button class="btn r s">✕</button>';
+    r.querySelector('select').value = s.a; r.querySelector('input').value = s.v || '';
+    const hint = () => { const a = ACTS.find(x => x.name === r.querySelector('select').value); r.querySelector('input').placeholder = a ? (a.arg || 'не нужно') : 'имя команды'; };
+    r.querySelector('select').onchange = hint; hint();
+    r.querySelector('button').onclick = () => r.remove();
+    box.appendChild(r);
+  };
+  (c.steps || []).forEach(addStep);
+  $('#eAdd').onclick = () => addStep({a: 'say', v: ''});
+  $('#eCancel').onclick = () => ed.innerHTML = '';
+  $('#eSave').onclick = () => {
+    const name = $('#eName').value.trim().toLowerCase();
+    const cmd = {
+      name, triggers: [name, ...$('#eTr').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)].filter((v, i, a) => v && a.indexOf(v) === i),
+      steps: [...box.children].map(r => ({a: r.querySelector('select').value, v: r.querySelector('input').value.trim()}))
+    };
+    if (c.name && c.name !== name) J.deleteCommand(c.name);
+    const err = J.saveCommand(JSON.stringify(cmd));
+    if (err) { $('#eErr').textContent = err; return; }
+    ed.innerHTML = ''; renderCmds();
+  };
+  ed.scrollIntoView();
+}
+$('#newCmd').onclick = () => openEditor(null);
+
+// ---------- settings ----------
+function renderPerms() {
+  const p = JSON.parse(J.perms());
+  const rows = [
+    ['access', 'Руки (Спец. возможности)', 'нажимать, листать, режим «сам»'],
+    ['mic', 'Микрофон', 'голосовые команды'],
+    ['contacts', 'Контакты', '«позвони маме»'],
+    ['dnd', 'Режим «Не беспокоить»', 'тишина, режим сна'],
+    ['write', 'Системные настройки', 'яркость'],
+    ['notif', 'Уведомления', 'кнопка «Стоп» в шторке'],
+  ];
+  $('#perms').innerHTML = rows.map(([k, t, why]) => '<div class="perm"><div><div>' + t + ' <span class="' + (p[k] ? 'ok">✓' : 'no">✗') + '</span></div><div class="dim">' + why + '</div></div>' +
+    (p[k] ? '' : '<button class="btn s" onclick="J.perm(\'' + k + '\')">Дать</button>') + '</div>').join('');
+}
+
+let pollTimer = null;
+function renderModels() {
+  const m = JSON.parse(J.models());
+  const cur = m.current ? m.current.split('/').pop() : 'не выбрана';
+  $('#modelState').innerHTML = 'Сейчас: <b>' + esc(cur) + '</b>' + (m.loaded ? ' (в памяти)' : '') + '<br>' + esc(m.status || '') + '<br>Свободно: ' + m.free_mb + ' МБ';
+  $('#presets').innerHTML = m.presets.map(p => '<button class="btn s p" data-id="' + p.id + '">⬇ ' + esc(p.title) + '</button>').join('');
+  $('#presets').querySelectorAll('button').forEach(b => b.onclick = () => { const e = J.download(b.dataset.id); if (e) alert(e); pollModels(); });
+  $('#files').innerHTML = m.files.map(f => '<div class="perm"><div>' + esc(f.name) + ' <span class="dim">' + f.mb + ' МБ</span>' + (f.path === m.current ? ' <span class="ok">✓</span>' : '') + '</div><div class="row">' +
+    (f.path === m.current ? '' : '<button class="btn s" data-use="' + esc(f.path) + '">Использовать</button>') + '<button class="btn s r" data-del="' + esc(f.path) + '">✕</button></div></div>').join('');
+  $('#files').querySelectorAll('[data-use]').forEach(b => b.onclick = () => { J.useModel(b.dataset.use); renderSettings(); });
+  $('#files').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { if (confirm('Удалить файл модели?')) { J.deleteModel(b.dataset.del); renderModels(); } });
+  $('#dlp').style.display = m.busy ? '' : 'none';
+  $('#cancelDl').style.display = m.busy ? '' : 'none';
+  if (m.total > 0) $('#dlp').value = Math.floor(m.done * 100 / m.total);
+  return m.busy;
+}
+function pollModels() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(() => { if (!renderModels()) { clearInterval(pollTimer); renderModels(); } }, 1000);
+}
+
+function renderSettings() {
+  const p = JSON.parse(J.prefs());
+  const local = p.backend !== 'ollama';
+  $('#bLocal').classList.toggle('on', local); $('#bOllama').classList.toggle('on', !local);
+  $('#localBox').style.display = local ? '' : 'none'; $('#ollamaBox').style.display = local ? 'none' : '';
+  ['threads', 'nCtx', 'ollamaUrl', 'ollamaModel', 'handsSteps'].forEach(k => $('#' + k).value = p[k]);
+  $('#speakChip').classList.toggle('on', p.speak);
+  renderPerms(); if (renderModels()) pollModels();
+}
+$('#bLocal').onclick = () => { J.setPref('backend', 'local'); renderSettings(); };
+$('#bOllama').onclick = () => { J.setPref('backend', 'ollama'); renderSettings(); };
+$('#speakChip').onclick = () => { J.setPref('speak', String(!$('#speakChip').classList.contains('on'))); renderSettings(); };
+['threads', 'nCtx', 'ollamaUrl', 'ollamaModel', 'handsSteps'].forEach(k => $('#' + k).onchange = e => J.setPref(k, e.target.value));
+
+// first launch: no model yet
+(function () {
+  const m = JSON.parse(J.models()), p = JSON.parse(J.prefs());
+  add('j', 'Привет, я Джарвис. Нажми на круг и скажи, что сделать: «включи фонарик», «будильник на 7:30», «открой ютуб и сделай громкость 50». Начни со слова «сам», и я попробую сделать задачу прямо на экране.');
+  if (p.backend === 'local' && !m.current) add('e', 'Сначала скачай модель: Настройки → Мозг → «Умнее: 1.5b».');
+})();
+</script>
+</body>
+</html>

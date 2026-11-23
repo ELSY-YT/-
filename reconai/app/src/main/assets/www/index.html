@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="/static/icon-192.png">
+<title>ReconAI</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--fg:#c9d1d9;--mut:#8b949e;--acc:#2ea043;--blue:#58a6ff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,Roboto,sans-serif}
+button,input,select{font:inherit}
+.hidden{display:none!important}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top));background:var(--bg);border-bottom:1px solid var(--line)}
+header b{color:var(--blue);font-size:18px;flex:1}
+header small{color:var(--mut)}
+main{padding:12px 12px calc(84px + env(safe-area-inset-bottom))}
+.tab{display:none}.tab.on{display:block}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--mut);padding:9px 0 7px;font-size:11px}
+nav button span{display:block;font-size:20px;line-height:1.2}
+nav button.on{color:var(--blue)}
+input,select{width:100%;background:var(--panel);color:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 12px;outline:none}
+input:focus{border-color:var(--blue)}
+.btn{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:11px 14px;font-weight:600}
+.btn.sec{background:var(--panel);border:1px solid var(--line);color:var(--fg)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.chips button{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:8px 13px}
+.chips button:active{background:var(--line)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
+pre{white-space:pre-wrap;word-break:break-word;margin:0;font:12.5px/1.45 ui-monospace,Consolas,monospace}
+#msgs .m{margin:8px 0;padding:10px 12px;border-radius:14px;max-width:92%;white-space:pre-wrap;word-break:break-word}
+#msgs .u{background:#1f6feb;color:#fff;margin-left:auto;border-bottom-right-radius:4px}
+#msgs .a{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:4px}
+#msgs .t{color:var(--mut);font:12px ui-monospace,monospace;margin:2px 4px}
+#composer{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));display:flex;gap:8px;padding:8px 12px;background:var(--bg);border-top:1px solid var(--line)}
+#composer input{flex:1}
+#chat{padding-bottom:70px}
+h3{margin:16px 0 6px;color:var(--blue);font-size:14px;text-transform:uppercase;letter-spacing:.04em}
+a{color:var(--blue)}
+.links a{display:inline-block;margin:4px 6px 4px 0;padding:8px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--fg)}
+#auth{max-width:380px;margin:12vh auto 0;padding:0 20px}
+#auth h1{color:var(--blue);text-align:center;margin:0 0 4px}
+#auth p{color:var(--mut);text-align:center;margin:0 0 22px}
+#auth input{margin-bottom:10px}
+.err{color:#f85149;min-height:20px;text-align:center}
+.dots:after{content:'…';animation:d 1s steps(3,end) infinite}
+@keyframes d{0%{content:'.'}33%{content:'..'}66%{content:'...'}}
+</style>
+</head>
+<body>
+
+<section id="auth" class="hidden">
+  <h1>ReconAI</h1><p>OSINT-агент с ИИ прямо в телефоне</p>
+  <input id="au" placeholder="Логин" autocapitalize="off" autocomplete="username">
+  <input id="ap" placeholder="Пароль" type="password" autocomplete="current-password">
+  <div class="row"><button class="btn" onclick="auth('login')">Войти</button><button class="btn sec" onclick="auth('register')">Регистрация</button></div>
+  <div class="err" id="aerr"></div>
+</section>
+
+<div id="appview" class="hidden">
+<header><b>ReconAI</b><small id="who"></small></header>
+<main>
+  <!-- AI agent -->
+  <div class="tab on" id="chat">
+    <div class="chips">
+      <button onclick="recon()">⚡ Быстрая разведка</button>
+      <button onclick="resetChat()">Новый чат</button>
+      <button onclick="api('/api/stop',{})">⏹ Стоп</button>
+    </div>
+    <div id="msgs"></div>
+  </div>
+  <!-- Utilities -->
+  <div class="tab" id="tools">
+    <input id="targ" placeholder="домен, IP или URL" autocapitalize="off">
+    <div class="chips">
+      <button onclick="tool('dns_lookup')">DNS</button><button onclick="tool('whois_lookup')">WHOIS</button>
+      <button onclick="tool('subdomains')">Поддомены</button><button onclick="tool('ip_info')">IP</button>
+      <button onclick="tool('http_headers')">Заголовки</button><button onclick="tool('wayback')">Wayback</button>
+      <button onclick="tool('web_search')">Поиск</button><button onclick="tool('fetch_url')">Открыть URL</button>
+    </div>
+    <div class="card"><pre id="tout">Результат появится здесь</pre></div>
+  </div>
+  <!-- Photo -->
+  <div class="tab" id="photo">
+    <input type="file" id="pfile" accept="image/*">
+    <div class="chips"><button onclick="exif()">EXIF и GPS</button><button onclick="photoAI()">ИИ: где снято?</button></div>
+    <div class="card"><pre id="pout">Выбери фото. Учти: мессенджеры и соцсети обычно вырезают EXIF, лучше брать оригинал из галереи.</pre></div>
+    <h3>Обратный поиск</h3>
+    <div class="links">
+      <a href="https://yandex.ru/images/" target="_blank">Яндекс Картинки</a>
+      <a href="https://lens.google.com/" target="_blank">Google Lens</a>
+      <a href="https://www.bing.com/visualsearch" target="_blank">Bing Visual</a>
+      <a href="https://tineye.com/" target="_blank">TinEye</a>
+    </div>
+  </div>
+  <!-- Services -->
+  <div class="tab" id="links">
+    <h3>Инфраструктура</h3><div class="links">
+      <a href="https://www.shodan.io" target="_blank">Shodan</a><a href="https://search.censys.io" target="_blank">Censys</a>
+      <a href="https://crt.sh" target="_blank">crt.sh</a><a href="https://securitytrails.com" target="_blank">SecurityTrails</a>
+      <a href="https://www.virustotal.com" target="_blank">VirusTotal</a><a href="https://dnsdumpster.com" target="_blank">DNSDumpster</a></div>
+    <h3>Архивы</h3><div class="links">
+      <a href="https://web.archive.org" target="_blank">Wayback Machine</a><a href="https://archive.ph" target="_blank">archive.today</a></div>
+    <h3>Свой цифровой след</h3><div class="links">
+      <a href="https://haveibeenpwned.com" target="_blank">Have I Been Pwned</a></div>
+    <h3>Обучение</h3><div class="links">
+      <a href="https://www.tracelabs.org" target="_blank">Trace Labs</a><a href="https://osintframework.com" target="_blank">OSINT Framework</a></div>
+  </div>
+  <!-- Settings -->
+  <div class="tab" id="settings">
+    <div class="card"><pre id="sstat">…</pre></div>
+    <h3>Где работает ИИ</h3>
+    <select id="sback"><option value="local">В телефоне (без интернета для ИИ)</option><option value="ollama">Ollama на ПК или в Termux</option></select>
+    <div id="blocal">
+      <h3>Модель в телефоне</h3>
+      <select id="sfile"></select>
+      <div class="row" style="margin-top:8px"><select id="spreset"></select></div>
+      <div class="chips"><button onclick="dl()">⬇️ Скачать</button><button onclick="Android.pickModel()">📁 Выбрать .gguf</button>
+        <button onclick="api('/api/model/cancel',{})">Отмена</button><button onclick="delModel()">🗑 Удалить выбранную</button></div>
+      <div class="card hidden" id="dlbox"><pre id="dltext"></pre><progress id="dlbar" max="100" value="0" style="width:100%"></progress></div>
+      <h3>Потоки процессора</h3>
+      <select id="sthreads"><option>2</option><option>4</option><option>6</option><option>8</option></select>
+    </div>
+    <div id="bollama" class="hidden">
+      <h3>Адрес Ollama</h3><input id="sollama" autocapitalize="off" placeholder="http://192.168.1.10:11434">
+      <h3>Модель Ollama</h3><input id="smodel" autocapitalize="off">
+    </div>
+    <h3>Контекст (num_ctx)</h3>
+    <select id="sctx"><option>1024</option><option>2048</option><option>4096</option><option>8192</option></select>
+    <div class="row" style="margin-top:14px"><button class="btn" onclick="saveSettings()">Сохранить</button><button class="btn sec" onclick="logout()">Выйти</button></div>
+  </div>
+</main>
+<div id="composer"><input id="inp" placeholder="Спроси агента…" enterkeyhint="send"><button class="btn" onclick="send()">▶</button></div>
+<nav>
+  <button class="on" data-t="chat"><span>🤖</span>Агент</button>
+  <button data-t="tools"><span>🛠</span>Утилиты</button>
+  <button data-t="photo"><span>🖼</span>Фото</button>
+  <button data-t="links"><span>🔗</span>Сервисы</button>
+  <button data-t="settings"><span>⚙️</span>Настройки</button>
+</nav>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const api=async(u,b)=>{const r=await fetch(u,b===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+  if(r.status===401&&!u.includes('login')&&!u.includes('register')){show(false);throw new Error('auth')} return r.json()};
+let photoPath=null;
+
+function show(logged,user){$('auth').classList.toggle('hidden',logged);$('appview').classList.toggle('hidden',!logged);if(user)$('who').textContent=user}
+async function boot(){const m=await api('/api/me');show(!!m.user,m.user);if(m.user)loadSettings()}
+async function auth(kind){$('aerr').textContent='';const r=await api('/api/'+kind,{name:$('au').value,password:$('ap').value});
+  if(r.error)$('aerr').textContent=r.error;else{show(true,r.user);loadSettings()}}
+async function logout(){await api('/api/logout',{});show(false)}
+
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id===b.dataset.t));
+  $('composer').classList.toggle('hidden',b.dataset.t!=='chat');
+  if(b.dataset.t==='settings')loadSettings()});
+
+function bubble(cls,text){const d=document.createElement('div');d.className='m '+cls;d.textContent=text;$('msgs').appendChild(d);window.scrollTo(0,document.body.scrollHeight);return d}
+function q(t){$('inp').value=t;send()}
+async function send(){const t=$('inp').value.trim();if(!t)return;$('inp').value='';bubble('u',t);
+  const wait=bubble('a','Думаю');wait.classList.add('dots');
+  const {job,error}=await api('/api/ask',{text:t});if(error){wait.textContent=error;return}
+  poll(job,wait)}
+function poll(job,wait){let shown=0;
+  const tick=async()=>{const j=await api('/api/job/'+job);
+    while(shown<j.log.length){const d=document.createElement('div');d.className='t';d.textContent=j.log[shown++];$('msgs').insertBefore(d,wait)}
+    if(j.done){wait.classList.remove('dots');wait.textContent=j.answer||'(пустой ответ)';window.scrollTo(0,document.body.scrollHeight)}
+    else setTimeout(tick,1500)};
+  tick()}
+$('inp').addEventListener('keydown',e=>{if(e.key==='Enter')send()});
+async function recon(){const t=prompt('Домен или IP');if(!t)return;bubble('u','⚡ Разведка: '+t);
+  const wait=bubble('a','Собираю данные');wait.classList.add('dots');
+  const {job,error}=await api('/api/recon',{target:t});if(error){wait.classList.remove('dots');wait.textContent=error;return}
+  poll(job,wait)}
+async function resetChat(){await api('/api/reset',{});$('msgs').innerHTML=''}
+
+async function tool(name){const a=$('targ').value.trim();if(!a)return;$('tout').textContent='Запрос…';
+  const r=await api('/api/tool/'+name,{arg:a});$('tout').textContent=JSON.stringify(r,null,2)}
+
+async function upload(){const f=$('pfile').files[0];if(!f){$('pout').textContent='Сначала выбери фото';return null}
+  const fd=new FormData();fd.append('file',f);$('pout').textContent='Загружаю…';
+  const r=await (await fetch('/api/photo',{method:'POST',body:fd})).json();photoPath=r.path;return r}
+async function exif(){const r=await upload();if(r)$('pout').textContent=JSON.stringify(r.exif&&Object.keys(r.exif).length?r:{...r,note:'EXIF нет — скорее всего, его вырезали при пересылке'},null,2)}
+async function photoAI(){const r=await upload();if(!r)return;
+  document.querySelector('nav button[data-t=chat]').click();
+  q(`Определи, где и когда могло быть сделано фото ${photoPath}: сначала image_exif, затем проверь найденное через поиск. Не идентифицируй людей на фото.`)}
+
+let S=null,dlTimer=null;
+function mb(n){return (n/1048576).toFixed(0)+' МБ'}
+function fillModels(m){const sel=$('sfile');sel.innerHTML='';
+  if(!m.files.length){sel.innerHTML='<option value="">— модели нет, скачайте или выберите файл —</option>'}
+  m.files.forEach(f=>{const o=document.createElement('option');o.value=f.path;o.textContent=f.name+' ('+f.mb+' МБ)';sel.appendChild(o)});
+  if(m.current)sel.value=m.current;
+  $('spreset').innerHTML=m.presets.map(p=>`<option value="${p.id}">${p.title}</option>`).join('');
+  $('dlbox').classList.toggle('hidden',!m.busy&&!m.status);
+  $('dltext').textContent=m.status+(m.total?`\n${mb(m.done)} из ${mb(m.total)}`:'');
+  $('dlbar').value=m.total?Math.floor(m.done*100/m.total):0}
+async function watchDl(){clearTimeout(dlTimer);const m=await api('/api/model/state');fillModels(m);
+  if(m.busy)dlTimer=setTimeout(watchDl,1000);else loadSettings(true)}
+async function loadSettings(quiet){const s=await api('/api/settings');S=s;
+  $('sback').value=s.backend;$('smodel').value=s.model;$('sollama').value=s.ollama;$('sctx').value=String(s.num_ctx);$('sthreads').value=String(s.threads);
+  $('blocal').classList.toggle('hidden',s.backend!=='local');$('bollama').classList.toggle('hidden',s.backend!=='ollama');
+  fillModels(s.models);
+  $('sstat').textContent=s.backend==='local'
+    ?`ИИ в телефоне: ${s.local_model?s.local_model.split('/').pop():'модель не выбрана'}\nЗагружена в память: ${s.models.loaded?'да':'нет (загрузится при первом вопросе)'}\nСвободно места: ${s.models.free_mb} МБ`
+    :`Ollama (${s.ollama}): ${s.ollama_status}\nУстановленные модели: ${s.installed.join(', ')||'нет'}`;
+  if(s.models.busy&&!quiet)watchDl()}
+$('sback').onchange=()=>{$('blocal').classList.toggle('hidden',$('sback').value!=='local');$('bollama').classList.toggle('hidden',$('sback').value!=='ollama')};
+async function dl(){const r=await api('/api/model/download',{preset:$('spreset').value});if(r.error){alert(r.error);return}watchDl()}
+async function delModel(){const p=$('sfile').value;if(!p||!confirm('Удалить '+p.split('/').pop()+'?'))return;await api('/api/model/delete',{path:p});loadSettings()}
+async function saveSettings(){const b={backend:$('sback').value,num_ctx:+$('sctx').value,threads:+$('sthreads').value,ollama:$('sollama').value,model:$('smodel').value};
+  if($('sfile').value)b.local_model=$('sfile').value;
+  const c=+$('sctx').value;Object.assign(b,c<=2048?{tool_chars:1500,history:6,max_steps:6}:c<=4096?{tool_chars:3000,history:10,max_steps:8}:{tool_chars:6000,history:16,max_steps:12});
+  await api('/api/settings',b);loadSettings()}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('settings').classList.contains('on'))watchDl()});
+
+boot();
+</script>
+</body>
+</html>
