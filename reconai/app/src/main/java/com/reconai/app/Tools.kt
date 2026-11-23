@@ -13,7 +13,12 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.util.Locale
 import java.util.concurrent.TimeUnit
+import com.google.i18n.phonenumbers.PhoneNumberUtil
+import com.google.i18n.phonenumbers.PhoneNumberToCarrierMapper
+import com.google.i18n.phonenumbers.PhoneNumberToTimeZonesMapper
+import com.google.i18n.phonenumbers.geocoding.PhoneNumberOfflineGeocoder
 
 /** The same tools as the Termux version, rewritten without Python. */
 object Tools {
@@ -199,6 +204,96 @@ object Tools {
             .put("format", opts.outMimeType ?: "").put("exif", data)
     }
 
+
+    /** Phone number: offline analysis with libphonenumber plus links for manual public search. No personal data lookups. */
+    fun phoneInfo(raw: String): Any {
+        val util = PhoneNumberUtil.getInstance()
+        var s = raw.trim().replace(Regex("[^0-9+]"), "")
+        if (s.startsWith("8") && s.length == 11) s = "+7" + s.drop(1)
+        if (!s.startsWith("+") && s.length == 11 && s.startsWith("7")) s = "+$s"
+        val n = try { util.parse(s, "RU") } catch (e: Exception) {
+            return JSONObject().put("error", "не похоже на номер телефона: ${e.message}")
+        }
+        val ru = Locale("ru")
+        val e164 = util.format(n, PhoneNumberUtil.PhoneNumberFormat.E164)
+        val digits = e164.removePrefix("+")
+        val region = util.getRegionCodeForNumber(n) ?: ""
+        val type = when (util.getNumberType(n)) {
+            PhoneNumberUtil.PhoneNumberType.MOBILE -> "мобильный"
+            PhoneNumberUtil.PhoneNumberType.FIXED_LINE -> "городской"
+            PhoneNumberUtil.PhoneNumberType.FIXED_LINE_OR_MOBILE -> "городской или мобильный"
+            PhoneNumberUtil.PhoneNumberType.TOLL_FREE -> "бесплатный (8-800)"
+            PhoneNumberUtil.PhoneNumberType.PREMIUM_RATE -> "платный"
+            PhoneNumberUtil.PhoneNumberType.VOIP -> "IP-телефония"
+            PhoneNumberUtil.PhoneNumberType.SHARED_COST -> "с разделённой оплатой"
+            else -> "неизвестно"
+        }
+        val national = util.format(n, PhoneNumberUtil.PhoneNumberFormat.NATIONAL)
+        val intl = util.format(n, PhoneNumberUtil.PhoneNumberFormat.INTERNATIONAL)
+        val q = "\"$e164\" OR \"$intl\" OR \"$national\""
+        val links = JSONObject()
+            .put("Google", "https://www.google.com/search?q=" + enc(q))
+            .put("Яндекс", "https://yandex.ru/search/?text=" + enc(q))
+            .put("DuckDuckGo", "https://duckduckgo.com/?q=" + enc(q))
+            .put("Telegram", "https://t.me/+$digits")
+            .put("WhatsApp", "https://wa.me/$digits")
+            .put("Viber", "viber://chat?number=%2B$digits")
+        return JSONObject()
+            .put("e164", e164).put("international", intl).put("national", national)
+            .put("valid", util.isValidNumber(n)).put("possible", util.isPossibleNumber(n))
+            .put("type", type)
+            .put("country", if (region.isNotEmpty()) Locale("", region).getDisplayCountry(ru) + " ($region)" else "неизвестно")
+            .put("region", PhoneNumberOfflineGeocoder.getInstance().getDescriptionForNumber(n, ru).ifBlank { "—" })
+            .put("carrier", PhoneNumberToCarrierMapper.getInstance().getNameForNumber(n, ru).ifBlank { "—" })
+            .put("carrier_note", "оператор по исходному диапазону номеров; номер мог быть перенесён к другому")
+            .put("timezones", JSONArray(PhoneNumberToTimeZonesMapper.getInstance().getTimeZonesForNumber(n)))
+            .put("links", links)
+    }
+
+    private fun resolveIp(host: String): String =
+        try { InetAddress.getByName(host.removePrefix("https://").removePrefix("http://").substringBefore('/')).hostAddress ?: host } catch (_: Exception) { host }
+
+    /** Shodan InternetDB: open ports, software and known CVEs for an IP. Free, no key. */
+    fun shodan(ipOrHost: String): Any {
+        val ip = resolveIp(ipOrHost)
+        get("https://internetdb.shodan.io/$ip").use { r ->
+            val b = r.body?.string() ?: "{}"
+            if (r.code == 404) return JSONObject().put("ip", ip).put("note", "Shodan ничего не знает об этом IP")
+            return JSONObject(b).put("shodan_page", "https://www.shodan.io/host/$ip")
+        }
+    }
+
+    /** urlscan.io: public scans of a domain (what the site loaded, server, ASN, screenshot). */
+    fun urlscan(domain: String): Any {
+        val d = domain.lowercase().removePrefix("https://").removePrefix("http://").substringBefore('/')
+        val j = get("https://urlscan.io/api/v1/search/?q=domain:${enc(d)}&size=8").use { JSONObject(it.body?.string() ?: "{}") }
+        val arr = j.optJSONArray("results") ?: return JSONObject().put("error", j.optString("message", "нет ответа"))
+        val out = JSONArray()
+        for (i in 0 until arr.length()) {
+            val x = arr.getJSONObject(i); val p = x.optJSONObject("page") ?: JSONObject()
+            out.put(JSONObject().put("time", x.optJSONObject("task")?.optString("time"))
+                .put("url", p.optString("url")).put("title", p.optString("title")).put("ip", p.optString("ip"))
+                .put("server", p.optString("server")).put("asn", p.optString("asnname")).put("country", p.optString("country"))
+                .put("screenshot", x.optString("screenshot"))
+                .put("report", "https://urlscan.io/result/" + x.optString("_id") + "/"))
+        }
+        return JSONObject().put("total", j.optInt("total")).put("scans", out)
+    }
+
+    /** XposedOrNot: in which public breaches an email appeared (only the breach names, no leaked data). */
+    fun breachCheck(email: String): Any {
+        val e = email.trim().lowercase()
+        if (!Regex("^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$").matches(e)) return JSONObject().put("error", "нужен email")
+        get("https://api.xposedornot.com/v1/check-email/${enc(e)}").use { r ->
+            val b = r.body?.string() ?: "{}"
+            val j = runCatching { JSONObject(b) }.getOrDefault(JSONObject())
+            val list = j.optJSONArray("breaches")?.optJSONArray(0)
+                ?: return JSONObject().put("email", e).put("found", false).put("note", "в известных утечках не найден")
+            return JSONObject().put("email", e).put("found", true).put("count", list.length()).put("breaches", list)
+                .put("advice", "смени пароли на этих сервисах и включи 2FA")
+        }
+    }
+
     data class Spec(val name: String, val desc: String, val param: String, val paramDesc: String)
 
     val SPECS = listOf(
@@ -211,6 +306,10 @@ object Tools {
         Spec("http_headers", "HTTP-заголовки и цепочка редиректов", "url", "URL или домен"),
         Spec("wayback", "Снимки сайта в Wayback Machine", "url", "URL или домен"),
         Spec("image_exif", "EXIF и GPS из загруженного фото", "path", "путь к файлу"),
+        Spec("phone_info", "Анализ номера телефона: страна, регион, оператор, тип, ссылки для поиска", "number", "номер телефона"),
+        Spec("shodan", "Открытые порты, ПО и уязвимости IP из Shodan InternetDB", "ip", "IP или домен"),
+        Spec("urlscan", "Публичные сканы сайта в urlscan.io", "domain", "домен"),
+        Spec("breach_check", "В каких известных утечках встречается email (только названия)", "email", "email"),
     )
 
     fun specJson(s: Spec): JSONObject = JSONObject().put("type", "function").put("function",
@@ -234,6 +333,10 @@ object Tools {
             "http_headers" -> httpHeaders(v)
             "wayback" -> wayback(v)
             "image_exif" -> imageExif(v)
+            "phone_info" -> phoneInfo(v)
+            "shodan" -> shodan(v)
+            "urlscan" -> urlscan(v)
+            "breach_check" -> breachCheck(v)
             else -> JSONObject().put("error", "нет такого инструмента: $name")
         }
     } catch (e: Exception) {

@@ -11,7 +11,9 @@ import java.util.concurrent.TimeUnit
 
 const val SYSTEM = "Ты ReconAI — ассистент по OSINT-разведке инфраструктуры, сайтов и открытой информации. " +
         "Пользуйся инструментами, проверяй факты, давай ссылки. Отвечай по-русски, кратко. " +
-        "Не составляй досье на частных лиц и не ищи их личные данные."
+        "Не составляй досье на частных лиц и не ищи их личные данные. По номеру телефона давай только технический анализ " +
+        "(страна, регион, оператор, тип) и ссылки для ручной проверки, не пытайся установить владельца. " +
+        "Проверку email на утечки предлагай для своих адресов."
 
 data class Call(val name: String, val args: JSONObject)
 data class Msg(val role: String, val content: String, val calls: List<Call> = emptyList(), val toolName: String? = null)
@@ -177,6 +179,11 @@ class Agent(private val cfg: Config) {
         Regex("(/\\S+/uploads/\\S+\\.\\w{2,5})").find(text)?.let {
             return listOf(Call("image_exif", JSONObject().put("path", it.groupValues[1].trimEnd('.', ',', ':'))))
         }
+        val email = Regex("[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+").find(text)?.value
+        if (email != null) return listOf(Call("breach_check", JSONObject().put("email", email.trimEnd('.'))))
+        val phone = Regex("(?<![\\w.])(\\+?\\d[\\d ()\\-]{8,17}\\d)(?![\\w.])").find(text)?.groupValues?.get(1)
+        if (phone != null && phone.count { it.isDigit() } in 10..15 && !Regex("^\\d{1,3}(\\.\\d{1,3}){3}$").matches(phone))
+            return listOf(Call("phone_info", JSONObject().put("number", phone)))
         val ip = Regex("(?<![\\w./])(\\d{1,3}(?:\\.\\d{1,3}){3})(?![\\w])").find(text)?.groupValues?.get(1)
         val url = Regex("https?://[^\\s,]+").find(text)?.value
         val domain = Regex("(?<![\\w./@-])((?:[a-z0-9-]+\\.)+[a-z]{2,24})(?![\\w-])", RegexOption.IGNORE_CASE)
@@ -193,6 +200,8 @@ class Agent(private val cfg: Config) {
             if (has("хост", "ip", "айпи", "провайдер", "asn", "располож", "сервер", "страна", "гео")) add("ip_info", target)
             if (!isIp && has("поддомен", "subdomain", "сабдомен")) add("subdomains", target)
             if (!isIp && has("заголов", "header", "редирект", "cms", "технолог", "защит")) add("http_headers", url ?: target)
+            if (has("порт", "port", "shodan", "шодан", "уязвим", "cve", "сервис")) add("shodan", target)
+            if (!isIp && has("urlscan", "скан", "скрин", "что грузит", "трекер")) add("urlscan", target)
             if (!isIp && has("архив", "wayback", "истори", "раньше", "снимк")) add("wayback", target)
             if (!isIp && has("открой", "страниц", "что на сайте", "прочитай", "о чём сайт", "контакт")) add("fetch_url", url ?: target)
             if (out.isEmpty()) { if (isIp) add("ip_info", target) else { add("dns_lookup", target); add("ip_info", target) } }
@@ -245,7 +254,7 @@ class Agent(private val cfg: Config) {
     /** Fast recon: the tools run directly and the model only writes the summary (reliable even on 1.5b). */
     fun recon(job: Job, target: String) {
         val isIp = target.replace(".", "").all { it.isDigit() } || ':' in target
-        val plan = if (isIp) listOf("ip_info") else listOf("dns_lookup", "whois_lookup", "ip_info", "http_headers", "subdomains")
+        val plan = if (isIp) listOf("ip_info", "shodan") else listOf("dns_lookup", "whois_lookup", "ip_info", "shodan", "http_headers", "subdomains", "urlscan")
         val data = JSONObject()
         for (name in plan) {
             job.log.add("🔧 $name $target")
@@ -256,6 +265,11 @@ class Agent(private val cfg: Config) {
                 res.put("headers", keep)
             }
             if (name == "whois_lookup" && res is JSONObject) res.remove("raw")
+            if (name == "urlscan" && res is JSONObject) {
+                val sc = res.optJSONArray("scans") ?: JSONArray(); val short = JSONArray()
+                for (i in 0 until minOf(3, sc.length())) sc.getJSONObject(i).let { short.put(JSONObject().put("time", it.optString("time")).put("url", it.optString("url")).put("server", it.optString("server")).put("report", it.optString("report"))) }
+                res = JSONObject().put("total", res.optInt("total")).put("latest", short)
+            }
             if (name == "subdomains" && res is JSONArray) {
                 val sample = JSONArray(); for (i in 0 until minOf(25, res.length())) sample.put(res.get(i))
                 res = JSONObject().put("count", res.length()).put("sample", sample)
@@ -264,7 +278,7 @@ class Agent(private val cfg: Config) {
         }
         job.data = data
         val prompt = "Кратко, по пунктам, на русском подведи итог разведки по цели $target: хостинг и провайдер, DNS и почта, " +
-                "регистратор и даты, заметные поддомены, что бросается в глаза.\n\n" + data.toString().take(2800)
+                "регистратор и даты, открытые порты и CVE из Shodan, заметные поддомены, что бросается в глаза.\n\n" + data.toString().take(2800)
         job.answer = try {
             llm().chat(listOf(Msg("system", SYSTEM), Msg("user", prompt)), false, 500).content
         } catch (e: Exception) {
