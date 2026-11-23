@@ -15,6 +15,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: SDK licenses, NDK, CMake
+        run: |
+          SDKM=$(ls -d $ANDROID_HOME/cmdline-tools/*/bin | sort -V | tail -1)/sdkmanager
+          yes | $SDKM --licenses > /dev/null || true
+          $SDKM "ndk;29.0.13113456" "cmake;3.31.6" "platforms;android-35" "build-tools;35.0.0" > /dev/null
       - name: Build
         run: |
           chmod +x gradlew
