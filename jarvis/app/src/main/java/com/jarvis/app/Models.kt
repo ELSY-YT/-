@@ -20,6 +20,8 @@ class Models(private val dir: File, private val cfg: Prefs) {
         val PRESETS = listOf(
             Preset("phone", "Умнее: 1.5b (~990 МБ, 4 ГБ ОЗУ)",
                 "$HF/Qwen2.5-1.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf"),
+            Preset("smart", "Самая умная: 3b (~1.9 ГБ, лучше 6+ ГБ ОЗУ, медленнее)",
+                "$HF/Qwen2.5-3B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-3B-Instruct-abliterated.Q4_K_M.gguf"),
             Preset("tiny", "Быстрее: 0.5b (~400 МБ)",
                 "$HF/Qwen2.5-0.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf"),
         )

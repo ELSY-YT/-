@@ -90,7 +90,9 @@ class Brain(private val store: CommandStore) {
             Action("timer", "минуты", "таймер", "\"\\\"\" [0-9]{1,3} \"\\\"\""),
             Action("dnd", "on | off", "режим «не беспокоить»", "onoff"),
             Action("media", "play | pause | next | prev", "музыка и видео", "enum(play,pause,next,prev)"),
-            Action("web_search", "запрос", "поиск в интернете"),
+            Action("web_search", "запрос", "найти ответ в интернете и пересказать"),
+            Action("browser_search", "запрос", "открыть поиск в браузере"),
+            Action("recon", "домен, IP, email, номер телефона или URL", "OSINT-разведка: whois, DNS, IP, порты, поддомены, утечки, архив"),
             Action("open_url", "адрес сайта", "открыть сайт"),
             Action("dial", "номер или имя контакта", "позвонить (откроет набор)"),
             Action("sms", "кому: текст", "написать SMS (откроет черновик)"),
@@ -117,6 +119,11 @@ class Brain(private val store: CommandStore) {
         fun norm(s: String) = s.lowercase().replace('ё', 'е').replace(Regex("[^\\p{L}\\p{N} ]"), " ")
             .replace(Regex("\\s+"), " ").trim()
 
+        val RECON_WORDS = listOf("whois", "вхоис", "хуиз", "dns", "днс", "поддомен", "shodan", "шодан", "порты", "открытые порты",
+            "утечк", "слив", "wayback", "вейбэк", "архив сайта", "urlscan", "заголовк", "разведк", "рекон", "recon", "osint", "осинт",
+            "проверь домен", "проверь сайт", "проверь ip", "проверь айпи", "проверь почту", "проверь email", "проверь номер",
+            "проанализируй домен", "проанализируй сайт", "проанализируй номер", "просканируй", "уязвимост")
+
         /** Word stems that hint at an action. If a phrase has hints, the model may only pick from those actions. */
         val HINTS = mapOf(
             "open_app" to listOf("открой", "запусти", "зайди", "включи ютуб", "открыть"),
@@ -126,7 +133,10 @@ class Brain(private val store: CommandStore) {
             "timer" to listOf("таймер", "засеки"),
             "dnd" to listOf("беспокоить", "беззвуч"),
             "media" to listOf("музык", "пауз", "трек", "песн", "следующ", "предыдущ", "плеер"),
-            "web_search" to listOf("найди", "поищи", "загугли", "погод", "рецепт", "что такое", "кто такой", "новост"),
+            "web_search" to listOf("найди", "поищи", "загугли", "погод", "рецепт", "что такое", "кто такой", "кто такая", "новост",
+                "узнай", "в интернете", "сколько стоит", "курс ", "что нового", "последние"),
+            "browser_search" to listOf("в браузере", "в гугле", "в яндексе"),
+            "recon" to RECON_WORDS,
             "open_url" to listOf("сайт", ".com", ".ru", "http"),
             "dial" to listOf("позвони", "набери", "звонок"),
             "sms" to listOf("смс", "sms", "напиши", "сообщени"),
@@ -143,6 +153,23 @@ class Brain(private val store: CommandStore) {
             "wait" to listOf("подожди", "через ", "пауза"),
             "say" to listOf("скажи", "произнеси"),
         )
+        private val EMAIL = Regex("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+")
+        private val IP = Regex("\\b\\d{1,3}(\\.\\d{1,3}){3}\\b")
+        private val URLX = Regex("(https?://)?([a-z0-9-]+\\.)+[a-z]{2,}(/\\S*)?", RegexOption.IGNORE_CASE)
+        private val PHONE = Regex("\\+?[78]?[\\s(-]*\\d{3}[\\s)-]*\\d{3}[\\s-]*\\d{2}[\\s-]*\\d{2}|\\+\\d[\\d\\s()-]{8,}\\d")
+
+        /** Finds what to investigate in a phrase: email, IP, domain/URL or phone number. */
+        fun reconTarget(raw: String): String? {
+            val t = raw.replace(Regex("\\s+точка\\s+", RegexOption.IGNORE_CASE), ".").replace(Regex("\\s+собака\\s+", RegexOption.IGNORE_CASE), "@")
+            EMAIL.find(t)?.let { return it.value }
+            IP.find(t)?.let { return it.value }
+            URLX.find(t)?.let { return it.value.trimEnd('.', ',') }
+            PHONE.find(t)?.let { return it.value.trim() }
+            return null
+        }
+
+        fun isRecon(text: String): Boolean { val t = text.lowercase().replace('ё', 'е'); return RECON_WORDS.any { it in t } }
+
         private val SPLIT = Regex("\\s+(?:и|потом|затем|а потом|после этого|а ещё|и ещё)\\s+|[,;]")
 
         fun hinted(text: String): Set<String> {
@@ -245,7 +272,9 @@ ${actionList()}${commandList()}"""
         "включи фонарик" to """{"steps":[{"a":"flashlight","v":"on"}],"say":"Фонарик включён."}""",
         "поставь будильник на 7:30 и открой телеграм" to """{"steps":[{"a":"alarm","v":"07:30"},{"a":"open_app","v":"Telegram"}],"say":"Будильник на 7:30, открываю Telegram."}""",
         "сделай потише" to """{"steps":[{"a":"volume","v":"down"}],"say":"Сделал тише."}""",
-        "найди погоду в Москве" to """{"steps":[{"a":"web_search","v":"погода в Москве"}],"say":"Ищу погоду в Москве."}""",
+        "найди погоду в Москве" to """{"steps":[{"a":"web_search","v":"погода в Москве сегодня"}],"say":""}""",
+        "открой в браузере поиск котиков" to """{"steps":[{"a":"browser_search","v":"котики"}],"say":""}""",
+        "кто такой Алан Тьюринг" to """{"steps":[{"a":"web_search","v":"Алан Тьюринг"}],"say":""}""",
         "открой ютуб" to """{"steps":[{"a":"open_app","v":"YouTube"}],"say":"Открываю YouTube."}""",
         "сколько заряда осталось" to """{"steps":[{"a":"battery","v":""}],"say":""}""",
         "напиши Саше привет, буду через час" to """{"steps":[{"a":"sms","v":"Саша: привет, буду через час"}],"say":"Открываю сообщение Саше."}""",
@@ -306,6 +335,13 @@ ${actionList()}${commandList()}"""
         return t.ifBlank { "Прошу прощения, сэр, я не расслышал. Повторите, пожалуйста." }
     }
 
+    /** Answer from search results, in the same calm voice. */
+    fun promptAnswer(q: String, found: String): String {
+        val sys = SYS_CHAT + "\nНиже результаты поиска в интернете. Ответь на вопрос пользователя только по ним, одним-тремя предложениями. Если в них нет ответа, так и скажи."
+        return "<|im_start|>system\n" + sys + "<|im_end|>\n<|im_start|>user\nВопрос: " + q + "\n\nРезультаты:\n" + found.take(2600) +
+            "<|im_end|>\n<|im_start|>assistant\n"
+    }
+
     @Synchronized fun remember(user: String, answer: String) {
         history.addLast(user to answer)
         while (history.size > 6) history.removeFirst()
@@ -346,6 +382,20 @@ ${actionList()}${commandList()}"""
 
     /** Very regular phrases are handled by rules: instant and never wrong. */
     fun rule(clause: String): Step? {
+        if (isRecon(clause)) reconTarget(clause)?.let { target ->
+            val lc = clause.lowercase()
+            val mode = when {
+                "whois" in lc || "вхоис" in lc || "хуиз" in lc -> "whois"
+                "поддомен" in lc -> "subdomains"
+                "shodan" in lc || "шодан" in lc || "порт" in lc || "уязвим" in lc -> "shodan"
+                "wayback" in lc || "вейбэк" in lc || "архив" in lc -> "wayback"
+                "заголовк" in lc -> "headers"
+                "urlscan" in lc -> "urlscan"
+                ("dns" in lc || "днс" in lc) -> "dns"
+                else -> "auto"
+            }
+            return Step("recon", "$mode $target")
+        }
         val t = norm(clause)
         Regex("^(?:нажми|тапни|кликни|ткни)(?: на)?(?: кнопку)? (.+)$").find(t)?.let { return Step("tap", it.groupValues[1]) }
         Regex("^(?:напечатай|введи|впиши) (.+)$", RegexOption.IGNORE_CASE).find(clause.trim())?.let { return Step("type", it.groupValues[1]) }
@@ -365,7 +415,7 @@ ${actionList()}${commandList()}"""
         }
     }
 
-    private val FREE_TEXT = setOf("sms", "note", "type", "say", "web_search")
+    private val FREE_TEXT = setOf("sms", "note", "type", "say", "web_search", "browser_search", "recon")
 
     /** Splits "открой ютуб и сделай громче" into parts; free-text actions keep the rest ("напиши Саше: привет, как дела"). */
     fun split(text: String): List<String> {

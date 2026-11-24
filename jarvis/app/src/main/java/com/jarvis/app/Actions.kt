@@ -28,6 +28,8 @@ class Actions(private val ctx: Context, private val store: CommandStore, private
 
     private val notesFile = File(ctx.filesDir, "notes.json")
     @Volatile var stopped = false
+    /** Set by Jarvis: (kind, value) -> result line. kind = "web" or "recon". */
+    var research: ((String, String) -> String)? = null
 
     private fun start(i: Intent): Boolean = try {
         ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
@@ -50,7 +52,7 @@ class Actions(private val ctx: Context, private val store: CommandStore, private
             val r = runCatching { run(s) }.getOrElse { "ошибка: ${it.message}" }
             log("• ${s.a} ${s.v}".trim() + " → " + r)
             // opening an app takes a moment; the next step (tap, type) needs its screen
-            if (s.a in setOf("open_app", "open_url", "settings", "web_search") && i < steps.size - 1) SystemClock.sleep(1500)
+            if (s.a in setOf("open_app", "open_url", "settings", "browser_search") && i < steps.size - 1) SystemClock.sleep(1500)
         }
     }
 
@@ -62,7 +64,9 @@ class Actions(private val ctx: Context, private val store: CommandStore, private
         "timer" -> timer(s.v)
         "dnd" -> dnd(s.v == "on")
         "media" -> media(s.v)
-        "web_search" -> search(s.v)
+        "web_search" -> research?.invoke("web", s.v) ?: search(s.v)
+        "browser_search" -> search(s.v)
+        "recon" -> research?.invoke("recon", s.v) ?: "разведка недоступна"
         "open_url" -> openUrl(s.v)
         "dial" -> dial(s.v)
         "sms" -> sms(s.v)

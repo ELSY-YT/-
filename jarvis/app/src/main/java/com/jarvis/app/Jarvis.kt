@@ -46,6 +46,7 @@ object Jarvis {
         models = Models(File(app.filesDir, "models"), prefs)
         brain = Brain(store)
         actions = Actions(app, store) { say(it) }
+        actions.research = { kind, v -> if (kind == "web") webAnswer(v) else recon(v) }
         hands = Hands({ llm() }, actions, { prefs.handsSteps }, { prefs.backend == "local" && "0.5B" in prefs.localModel })
         initTts()
         if (Build.VERSION.SDK_INT >= 26) {
@@ -170,6 +171,100 @@ object Jarvis {
                 emit("busy", "on" to false)
             }
         }
+    }
+
+    // ---------- search and ReconAI, built in ----------
+
+    private fun step(t: String) = emit("step", "text" to t)
+
+    /** Searches DuckDuckGo, reads the top page and lets the model answer in a sentence or three. */
+    private fun webAnswer(q: String): String {
+        step("🔎 ищу: $q")
+        val res = Recon.webSearch(q, 5)
+        val arr = res as? org.json.JSONArray
+        if (arr == null || arr.length() == 0) {
+            say("Поиск сейчас не отвечает, сэр. Открываю его в браузере.")
+            actions.run(Step("browser_search", q)); return "поиск недоступен, открыл браузер"
+        }
+        val sb = StringBuilder()
+        for (i in 0 until arr.length()) {
+            val r = arr.getJSONObject(i)
+            step("${i + 1}. ${r.optString("title")} — ${r.optString("url")}")
+            sb.append("[${i + 1}] ").append(r.optString("title")).append(": ").append(r.optString("snippet").take(300)).append('\n')
+        }
+        runCatching {
+            val page = Recon.fetchUrl(arr.getJSONObject(0).optString("url")) as JSONObject
+            sb.append("\nТекст первой страницы: ").append(page.optString("text").take(1200))
+        }
+        if (actions.stopped) return "остановлено"
+        val answer = runCatching { brain.calm(llm().chat(brain.promptAnswer(q, sb.toString()), 160)) }
+            .getOrElse { "Нашёл несколько результатов, сэр, они на экране." }
+        say(answer)
+        return "ответил по ${arr.length()} результатам"
+    }
+
+    private fun j(x: Any?): JSONObject = x as? JSONObject ?: JSONObject()
+
+    /** ReconAI inside Jarvis: picks the tools by the target, shows details on screen and says the short version. */
+    private fun recon(v: String): String {
+        val mode = v.substringBefore(' ').takeIf { it in setOf("auto", "whois", "dns", "subdomains", "shodan", "wayback", "headers", "urlscan") } ?: "auto"
+        val target = if (mode == "auto" && !v.startsWith("auto ")) v.trim() else v.substringAfter(' ').trim()
+        if (target.isEmpty()) { say("Что проверить, сэр? Назовите домен, IP, почту или номер."); return "нет цели" }
+        val isEmail = '@' in target
+        val isIp = Regex("^\\d{1,3}(\\.\\d{1,3}){3}$").matches(target)
+        val isPhone = !isEmail && !isIp && Regex("^[+\\d\\s()-]{9,}$").matches(target)
+        val host = target.lowercase().removePrefix("https://").removePrefix("http://").substringBefore('/').removePrefix("www.")
+        val tools = when {
+            mode != "auto" -> listOf(when (mode) { "whois" -> "whois_lookup"; "dns" -> "dns_lookup"; "headers" -> "http_headers"; else -> mode })
+            isEmail -> listOf("breach_check")
+            isPhone -> listOf("phone_info")
+            isIp -> listOf("ip_info", "shodan")
+            else -> listOf("whois_lookup", "dns_lookup", "ip_info", "shodan", "subdomains")
+        }
+        step("🛰 разведка: $target")
+        val out = mutableMapOf<String, Any>()
+        for (t in tools) {
+            if (actions.stopped) return "остановлено"
+            val arg = when (t) { "breach_check", "phone_info" -> target; "http_headers", "wayback" -> target; else -> host }
+            val r = Recon.run(t, JSONObject().put(Recon.paramOf(t) ?: "q", arg))
+            out[t] = r
+            step("• $t → " + Recon.toText(r, 700))
+        }
+        say(reconSummary(target, out))
+        return "разведка: ${tools.joinToString()}"
+    }
+
+    /** A short spoken summary built from the results, so it never invents anything. */
+    private fun reconSummary(target: String, o: Map<String, Any>): String {
+        val parts = mutableListOf<String>()
+        o["breach_check"]?.let { val b = j(it)
+            return when {
+                b.has("error") -> "Не удалось проверить почту: ${b.optString("error")}."
+                b.optBoolean("found") -> "Почта $target встречается в ${b.optInt("count")} известных утечках. Список на экране, сэр. Советую сменить пароли и включить двухфакторную защиту."
+                else -> "В известных утечках почта $target не найдена, сэр."
+            } }
+        o["phone_info"]?.let { val p = j(it)
+            if (p.has("error")) return "Это не похоже на номер телефона, сэр."
+            return "Номер ${p.optString("international")}: ${p.optString("type")}, ${p.optString("country")}, регион ${p.optString("region")}, исходный оператор ${p.optString("carrier")}. Ссылки для поиска на экране." }
+        o["whois_lookup"]?.let { val w = j(it)
+            if (w.has("error")) parts.add("WHOIS недоступен")
+            else listOfNotNull(w.optString("registrar").takeIf { s -> s.isNotBlank() && s != "null" }?.let { s -> "регистратор $s" },
+                w.optString("creation_date").takeIf { s -> s.isNotBlank() && s != "null" }?.let { s -> "создан ${s.take(10)}" },
+                w.optString("expiration_date").takeIf { s -> s.isNotBlank() && s != "null" }?.let { s -> "оплачен до ${s.take(10)}" }).let { l -> if (l.isNotEmpty()) parts.add(l.joinToString(", ")) } }
+        o["dns_lookup"]?.let { val d = j(it); d.optJSONArray("A")?.let { a -> if (a.length() > 0) parts.add("адрес ${a.getString(0)}") }
+            if (d.has("MX")) parts.add("есть почтовый сервер") }
+        o["ip_info"]?.let { val i = j(it); if (i.optBoolean("success", true)) {
+            val org = i.optJSONObject("connection")?.optString("org").orEmpty()
+            parts.add(listOf(org, i.optString("country"), i.optString("city")).filter { s -> s.isNotBlank() }.joinToString(", ").let { s -> if (o.containsKey("dns_lookup")) "хостинг $s" else "IP ${i.optString("ip")}: $s" }) } }
+        o["shodan"]?.let { val s = j(it)
+            s.optJSONArray("ports")?.let { p -> if (p.length() > 0) parts.add("открытые порты ${(0 until minOf(p.length(), 8)).joinToString(", ") { k -> p.get(k).toString() }}") }
+            s.optJSONArray("vulns")?.let { v -> if (v.length() > 0) parts.add("известных уязвимостей ${v.length()}") } }
+        o["subdomains"]?.let { (it as? org.json.JSONArray)?.let { a -> parts.add("поддоменов в сертификатах ${a.length()}") } }
+        o["http_headers"]?.let { val h = j(it); parts.add("ответ ${h.optInt("status")}, сервер ${h.optJSONObject("headers")?.optString("server")?.ifBlank { "не указан" } ?: "не указан"}") }
+        o["wayback"]?.let { (it as? org.json.JSONArray)?.let { a -> parts.add("снимков в архиве ${a.length()}" + if (a.length() > 0) ", первый ${a.getJSONObject(0).optString("time").take(4)} года" else "") } }
+        o["urlscan"]?.let { val u = j(it); parts.add("публичных сканов ${u.optInt("total")}") }
+        return if (parts.isEmpty()) "По $target ничего не нашлось, сэр. Подробности на экране."
+        else "$target: " + parts.joinToString("; ") + ". Подробности на экране, сэр."
     }
 
     /** The new command shown on screen was confirmed (maybe edited) by the button. */
