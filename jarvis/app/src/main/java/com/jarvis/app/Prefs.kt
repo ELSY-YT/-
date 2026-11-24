@@ -13,8 +13,8 @@ class Prefs(private val file: File) {
     var ollamaModel = "huihui_ai/qwen2.5-abliterate:7b"
     var speak = true                       // answer out loud
     var handsSteps = 10                    // max actions in "hands" mode
-    var voicePitch = 0.8f                  // lower = deeper, closer to a calm "butler" voice
-    var voiceRate = 1.05f
+    var voicePitch = 0.85f                  // lower = deeper, closer to a calm "butler" voice
+    var voiceRate = 0.92f          // unhurried, calm
     var voiceName = ""                     // a specific system voice, "" = engine default
     var ttsEngine = ""                     // TTS engine package, "" = system default (RHVoice, Piper etc. if installed)
     var sir = true                         // address the user as "сэр"

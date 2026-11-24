@@ -271,6 +271,56 @@ ${actionList()}${commandList()}"""
         return sb.toString()
     }
 
+    // ---------- free conversation ----------
+
+    private val SYS_CHAT = """Ты Джарвис, ИИ-дворецкий из фильмов про Железного человека, живёшь в телефоне пользователя.
+Говоришь спокойно, вежливо и неторопливо, как воспитанный английский дворецкий. Обращаешься к пользователю «сэр».
+Немного сухого юмора уместно, но без фамильярности. Никогда не повышаешь тон, не используешь восклицательные знаки и смайлики.
+Отвечаешь по-русски, коротко: одно-три предложения, потому что твой ответ читают вслух. Без списков и разметки.
+Если не знаешь ответа, честно говоришь об этом. Если просят что-то сделать на телефоне, вежливо предложи сказать это командой."""
+
+    private val history = ArrayDeque<Pair<String, String>>()   // last exchanges, kept only in memory
+
+    @Synchronized fun forget() = history.clear()
+
+    fun promptChat(user: String): String {
+        val sb = StringBuilder()
+        sb.append("<|im_start|>system\n").append(SYS_CHAT).append("<|im_end|>\n")
+        val shots = if (history.isEmpty()) listOf("привет" to "Добрый день, сэр. Все системы в норме. Чем могу быть полезен?") else emptyList()
+        for ((u, a) in shots + history) {
+            sb.append("<|im_start|>user\n").append(u).append("<|im_end|>\n")
+            sb.append("<|im_start|>assistant\n").append(a).append("<|im_end|>\n")
+        }
+        sb.append("<|im_start|>user\n").append(user).append("<|im_end|>\n<|im_start|>assistant\n")
+        return sb.toString()
+    }
+
+    /** Cleans the model's free text so it reads well aloud and stays calm. */
+    fun calm(raw: String): String {
+        var t = raw.substringBefore("<|im_end|>").substringBefore("<|im_start|>")
+            .replace(Regex("[*_#`>]+"), "").replace(Regex("[\\x{1F000}-\\x{1FAFF}\\x{2600}-\\x{27BF}\\x{FE0F}]"), "")
+            .replace(Regex("!+"), ".").replace(Regex("\\s+"), " ").trim()
+        // keep it short: at most three sentences
+        val sent = Regex("(?<=[.?…])\\s+").split(t).filter { it.isNotBlank() }
+        if (sent.size > 3) t = sent.take(3).joinToString(" ")
+        return t.ifBlank { "Прошу прощения, сэр, я не расслышал. Повторите, пожалуйста." }
+    }
+
+    @Synchronized fun remember(user: String, answer: String) {
+        history.addLast(user to answer)
+        while (history.size > 6) history.removeFirst()
+    }
+
+    private val CHAT_START = Regex("^(давай поговорим|поговори со мной|поболтаем|расскажи|как (ты|дела|жизнь|настроение)|что думаешь|как думаешь|ты кто|кто ты|привет|здравствуй|добр(ое|ый) (утро|день|вечер)|спасибо|почему|зачем)", RegexOption.IGNORE_CASE)
+
+    /** A phrase that is talk, not a phone action. */
+    fun isChat(text: String): Boolean {
+        val t = clean(text)
+        if (match(t) != null || rule(t) != null) return false
+        val h = hinted(t)
+        return h.isEmpty() || (CHAT_START.containsMatchIn(t) && h.all { it == "say" || it == "wait" })
+    }
+
     fun promptDo(text: String) = render(sysDo(), SHOTS_DO, text)
     fun promptCreate(text: String) = render(sysCreate(), SHOTS_CREATE, text)
 

@@ -8,7 +8,11 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /** prompt is already in Qwen chat format; grammar is GBNF (ignored by Ollama, which only gets "format: json"). */
-interface Llm { fun gen(prompt: String, grammar: String, maxTokens: Int = 200): String }
+interface Llm {
+    fun gen(prompt: String, grammar: String, maxTokens: Int = 200): String
+    /** Free conversation: no JSON, a little randomness so it sounds alive. */
+    fun chat(prompt: String, maxTokens: Int = 160): String
+}
 
 class LocalLlm(private val p: Prefs) : Llm {
     override fun gen(prompt: String, grammar: String, maxTokens: Int): String {
@@ -16,6 +20,15 @@ class LocalLlm(private val p: Prefs) : Llm {
             throw IllegalStateException("Модель не скачана. Настройки → Модель → Скачать.")
         LlamaBridge.ensure(p.localModel, p.nCtx, p.threads)?.let { throw IllegalStateException(it) }
         val r = LlamaBridge.generate(prompt, maxTokens, 0f, grammar)
+        if (!r.ok) throw IllegalStateException(r.text)
+        return r.text
+    }
+
+    override fun chat(prompt: String, maxTokens: Int): String {
+        if (p.localModel.isEmpty() || !java.io.File(p.localModel).exists())
+            throw IllegalStateException("Модель не скачана. Настройки → Модель → Скачать.")
+        LlamaBridge.ensure(p.localModel, p.nCtx, p.threads)?.let { throw IllegalStateException(it) }
+        val r = LlamaBridge.generate(prompt, maxTokens, 0.6f, "")
         if (!r.ok) throw IllegalStateException(r.text)
         return r.text
     }
@@ -28,10 +41,16 @@ class OllamaLlm(private val p: Prefs) : Llm {
             .readTimeout(3, TimeUnit.MINUTES).build()
     }
 
-    override fun gen(prompt: String, grammar: String, maxTokens: Int): String {
+    override fun gen(prompt: String, grammar: String, maxTokens: Int): String = call(prompt, maxTokens, true)
+
+    override fun chat(prompt: String, maxTokens: Int): String = call(prompt, maxTokens, false)
+
+    private fun call(prompt: String, maxTokens: Int, json: Boolean): String {
         val body = JSONObject().put("model", p.ollamaModel).put("prompt", prompt).put("raw", true)
-            .put("stream", false).put("format", "json").put("keep_alive", "30m")
-            .put("options", JSONObject().put("temperature", 0).put("num_predict", maxTokens).put("num_ctx", 4096))
+            .put("stream", false).put("keep_alive", "30m")
+            .put("options", JSONObject().put("temperature", if (json) 0.0 else 0.6).put("num_predict", maxTokens).put("num_ctx", 4096)
+                .put("stop", org.json.JSONArray().put("<|im_end|>").put("<|im_start|>")))
+        if (json) body.put("format", "json")
         val req = Request.Builder().url(p.ollamaUrl + "/api/generate")
             .post(body.toString().toRequestBody("application/json".toMediaType())).build()
         try {

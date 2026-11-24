@@ -30,6 +30,7 @@ object Jarvis {
     @Volatile var busy = false; private set
     @Volatile private var pending: UserCommand? = null      // a new command waiting for "да"
     var listener: ((JSONObject) -> Unit)? = null
+    fun forgetChat() = brain.forget()
 
     private const val CH = "jarvis"
     private const val NOTE_ID = 7
@@ -136,6 +137,13 @@ object Jarvis {
                         notifyRunning(goal)
                         actions.stopped = false
                         say(hands.run(goal) { emit("step", "text" to it) })
+                    }
+                    !brain.isCreate(t) && brain.deleteTarget(t) == null && brain.isChat(t) -> {
+                        pending = null
+                        val q = brain.clean(t)
+                        val a = brain.calm(llm().chat(brain.promptChat(q), 160))
+                        brain.remember(q, a)
+                        say(a)
                     }
                     else -> {
                         pending = null
