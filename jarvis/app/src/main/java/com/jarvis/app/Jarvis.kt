@@ -47,6 +47,10 @@ object Jarvis {
         brain = Brain(store)
         actions = Actions(app, store) { say(it) }
         actions.research = { kind, v -> if (kind == "web") webAnswer(v) else recon(v) }
+        LlamaBridge.onProgress = { phase, done, total, text ->
+            if (phase == -1) emit("step", "text" to "⚠ Модель весит $done МБ, а памяти в телефоне $total МБ. Ответы будут очень медленными, лучше взять 1.5b.")
+            else emit("progress", "phase" to phase, "done" to done, "total" to total, "text" to text)
+        }
         hands = Hands({ llm() }, actions, { prefs.handsSteps }, { prefs.backend == "local" && "0.5B" in prefs.localModel })
         initTts()
         if (Build.VERSION.SDK_INT >= 26) {

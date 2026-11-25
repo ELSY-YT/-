@@ -21,6 +21,16 @@ std::atomic<bool> g_stop{false};
 std::mutex g_mu;
 bool g_backend_ready = false;
 
+// progress for the screen: 0 idle, 1 loading model, 2 reading prompt, 3 writing answer
+std::mutex g_pmu;
+int g_phase = 0, g_done = 0, g_total = 0;
+std::string g_partial;
+void set_progress(int phase, int done, int total) {
+    std::lock_guard<std::mutex> lk(g_pmu);
+    g_phase = phase; g_done = done; g_total = total;
+    if (phase != 3) g_partial.clear();
+}
+
 void free_all() {
     if (g_batch) { llama_batch_ext_free(g_batch); g_batch = nullptr; }
     if (g_ctx) { llama_free(g_ctx); g_ctx = nullptr; }
@@ -42,6 +52,7 @@ bool decode_tokens(const llama_token *toks, size_t n, llama_pos pos0) {
         }
         if (end == n) llama_batch_ext_set_output_logits(g_batch, (int32_t) (end - i - 1), true);
         if (llama_process(g_ctx, LLAMA_PROCESS_TYPE_DECODE, g_batch) != 0) return false;
+        if (n > 1) set_progress(2, (int) end, (int) n);
         if (g_stop.load()) return false;
     }
     return true;
@@ -63,10 +74,11 @@ void rc_init(const char *backend_dir) {
 std::string rc_load(const char *path, int n_ctx, int n_threads) {
     std::lock_guard<std::mutex> lk(g_mu);
     free_all();
+    set_progress(1, 0, 0);
     llama_model_params mp = llama_model_default_params();
     mp.n_gpu_layers = 0;     // CPU only: phone GPUs are not reliable with llama.cpp
     g_model = llama_model_load_from_file(path, mp);
-    if (!g_model) return "не удалось загрузить модель (файл повреждён или это не GGUF)";
+    if (!g_model) { set_progress(0, 0, 0); return "не удалось загрузить модель (файл повреждён или это не GGUF)"; }
     g_vocab = llama_model_get_vocab(g_model);
 
     llama_context_params cp = llama_context_default_params();
@@ -77,9 +89,10 @@ std::string rc_load(const char *path, int n_ctx, int n_threads) {
     cp.n_threads = n_threads;
     cp.n_threads_batch = n_threads;
     g_ctx = llama_init_from_model(g_model, cp);
-    if (!g_ctx) { free_all(); return "не хватило памяти под контекст, уменьшите n_ctx"; }
+    if (!g_ctx) { free_all(); set_progress(0, 0, 0); return "не хватило памяти под контекст, уменьшите n_ctx"; }
     g_batch = llama_batch_ext_init(g_ctx);
-    if (!g_batch) { free_all(); return "не удалось создать batch"; }
+    if (!g_batch) { free_all(); set_progress(0, 0, 0); return "не удалось создать batch"; }
+    set_progress(0, 0, 0);
     return "";
 }
 
@@ -116,7 +129,9 @@ std::string rc_generate(const std::string &prompt, int max_tokens, float temp, c
         common = 0;
     }
     g_cached.assign(toks.begin(), toks.begin() + common);
+    set_progress(2, 0, (int) (toks.size() - common));
     if (!decode_tokens(toks.data() + common, toks.size() - common, (llama_pos) common)) {
+        set_progress(0, 0, 0);
         llama_memory_clear(mem, true); g_cached.clear();
         err = g_stop ? "остановлено" : "ошибка обработки промпта";
         return "";
@@ -144,17 +159,28 @@ std::string rc_generate(const std::string &prompt, int max_tokens, float temp, c
     }
 
     std::string out;
+    set_progress(3, 0, max_tokens);
     for (int i = 0; i < max_tokens && !g_stop.load(); ++i) {
         llama_token t = llama_sampler_sample(smpl, g_ctx, -1);
         if (llama_vocab_is_eog(g_vocab, t)) break;
         char buf[256];
         int m = llama_token_to_piece(g_vocab, t, buf, sizeof(buf), 0, false);
         if (m > 0) out.append(buf, m);
+        {
+            std::lock_guard<std::mutex> lk(g_pmu);
+            g_done = i + 1; g_partial = out;
+        }
         if (!decode_tokens(&t, 1, (llama_pos) g_cached.size())) { if (!g_stop) err = "ошибка генерации"; break; }
         g_cached.push_back(t);
     }
     llama_sampler_free(smpl);
+    set_progress(0, 0, 0);
     return out;
+}
+
+std::string rc_progress() {
+    std::lock_guard<std::mutex> lk(g_pmu);
+    return std::to_string(g_phase) + "|" + std::to_string(g_done) + "|" + std::to_string(g_total) + "|" + g_partial;
 }
 
 void rc_unload() {

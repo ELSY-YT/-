@@ -247,7 +247,13 @@ window.onJ = function (s) {
     case 'rms': $('#orb').style.transform = 'scale(' + (1 + Math.max(0, Math.min(10, e.v)) / 60) + ')'; break;
     case 'busy':
       busy = e.on; $('#stopBtn').style.display = e.on ? '' : 'none';
-      $('#st').textContent = e.on ? 'обработка' : 'онлайн'; break;
+      $('#st').textContent = e.on ? 'обработка' : 'онлайн';
+      if (!e.on) $('#partial').textContent = ''; break;
+    case 'progress':
+      if (e.phase === 1) { $('#st').textContent = 'загружаю модель'; $('#partial').textContent = 'Загружаю модель в память… первый раз это до минуты.'; }
+      else if (e.phase === 2) { $('#st').textContent = 'читаю ' + e.done + '/' + e.total; $('#partial').textContent = 'Читаю запрос: ' + e.done + ' из ' + e.total + ' токенов…'; }
+      else if (e.phase === 3) { $('#st').textContent = 'пишу ' + e.done; const t = e.text.trim(); $('#partial').textContent = t.startsWith('{') ? 'Думаю…' : t; }
+      break;
     case 'new_command': showNew(e.cmd); break;
     case 'commands': renderCmds(); break;
     case 'perms': if ($('#t-set').classList.contains('on')) renderPerms(); break;
