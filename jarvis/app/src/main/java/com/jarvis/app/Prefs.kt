@@ -21,7 +21,7 @@ class Prefs(private val file: File) {
 
     init { load() }
 
-    /** Threads actually used: the user's number, or the count of the fastest cores (2..4). */
+    /** Threads actually used: the user's number, or auto (fast cores, at most 2). */
     fun effThreads(): Int = if (threads > 0) threads else autoThreads
 
     companion object {
@@ -29,9 +29,8 @@ class Prefs(private val file: File) {
             val freqs = (0 until Runtime.getRuntime().availableProcessors()).mapNotNull { i ->
                 runCatching { File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq").readText().trim().toLong() }.getOrNull()
             }
-            val big = if (freqs.isEmpty()) Runtime.getRuntime().availableProcessors() / 2
-                else { val top = freqs.max(); freqs.count { it >= top * 0.8 } }
-            big.coerceIn(2, 4)
+            val big = if (freqs.isEmpty()) 2 else { val top = freqs.max(); freqs.count { it >= top * 0.8 } }
+            big.coerceIn(1, 2)   // 2 is what fixed the endless chat on a 4 GB phone; more threads made llama.cpp crawl
         }
     }
 

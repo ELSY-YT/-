@@ -53,11 +53,19 @@ class CommandStore(private val file: File) {
     }
 
     private fun load() {
-        if (!file.exists()) { list.addAll(DEFAULTS); save(); return }
-        runCatching {
+        if (file.exists()) runCatching {
             val arr = JSONArray(file.readText())
             for (i in 0 until arr.length()) list.add(UserCommand.of(arr.getJSONObject(i)))
         }
+        // Built-in commands are added once each, also on updates; one the user deleted stays deleted.
+        val seenFile = File(file.parentFile, "builtins_seen.txt")
+        val seen = if (seenFile.exists()) seenFile.readLines().map { it.trim() }.toMutableSet() else mutableSetOf()
+        var changed = !file.exists()
+        for (d in DEFAULTS) if (d.name !in seen) {
+            if (list.none { it.name.equals(d.name, true) }) list.add(d)
+            seen.add(d.name); changed = true
+        }
+        if (changed) { save(); seenFile.writeText(seen.joinToString("\n")) }
     }
 
     private fun save() { file.parentFile?.mkdirs(); file.writeText(toJson().toString(1)) }
@@ -68,6 +76,11 @@ class CommandStore(private val file: File) {
                 listOf(Step("dnd", "on"), Step("flashlight", "off"), Step("alarm", "07:00"), Step("say", "Спокойной ночи. Будильник на 7:00."))),
             UserCommand("доброе утро", listOf("доброе утро", "я проснулся"),
                 listOf(Step("dnd", "off"), Step("time", ""), Step("battery", ""))),
+            UserCommand("игровой режим", listOf("игровой режим", "включи игровой режим"),
+                listOf(Step("say", "Запускаю, сэр"), Step("dnd", "on"), Step("brightness", "100"), Step("battery", ""),
+                    Step("time", ""), Step("volume", "100"), Step("wait", "9"), Step("open_app", "Звук"),
+                    Step("media", "play"), Step("wait", "3"), Step("screen", "home"), Step("wait", "1"),
+                    Step("open_app", "Minecraft"), Step("wait", "3"), Step("say", "Удачной игры, сэр"))),
         )
     }
 }
