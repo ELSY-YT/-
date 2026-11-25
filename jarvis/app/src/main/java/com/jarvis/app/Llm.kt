@@ -33,7 +33,7 @@ class LocalLlm(private val p: Prefs) : Llm {
             warned = p.localModel
             LlamaBridge.onProgress?.invoke(-1, (f.length() shr 20).toInt(), (ram shr 20).toInt(), "")
         }
-        LlamaBridge.ensureWatched(p.localModel, p.nCtx, p.threads)?.let { throw IllegalStateException(it) }
+        LlamaBridge.ensureWatched(p.localModel, p.nCtx, p.effThreads())?.let { throw IllegalStateException(it) }
     }
     override fun gen(prompt: String, grammar: String, maxTokens: Int): String {
         if (p.localModel.isEmpty() || !java.io.File(p.localModel).exists())

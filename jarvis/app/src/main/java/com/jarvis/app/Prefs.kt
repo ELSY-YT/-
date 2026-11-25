@@ -7,7 +7,7 @@ import java.io.File
 class Prefs(private val file: File) {
     var backend = "local"                 // local | ollama
     var localModel = ""
-    var threads = 4
+    var threads = 0                        // 0 = auto: only the fast cores (more threads than fast cores makes llama.cpp crawl)
     var nCtx = 2048                        // same as the 4 GB profile of ReconAI
     var ollamaUrl = "http://192.168.1.10:11434"
     var ollamaModel = "huihui_ai/qwen2.5-abliterate:7b"
@@ -21,12 +21,26 @@ class Prefs(private val file: File) {
 
     init { load() }
 
+    /** Threads actually used: the user's number, or the count of the fastest cores (2..4). */
+    fun effThreads(): Int = if (threads > 0) threads else autoThreads
+
+    companion object {
+        val autoThreads: Int by lazy {
+            val freqs = (0 until Runtime.getRuntime().availableProcessors()).mapNotNull { i ->
+                runCatching { File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq").readText().trim().toLong() }.getOrNull()
+            }
+            val big = if (freqs.isEmpty()) Runtime.getRuntime().availableProcessors() / 2
+                else { val top = freqs.max(); freqs.count { it >= top * 0.8 } }
+            big.coerceIn(2, 4)
+        }
+    }
+
     fun load() {
         if (!file.exists()) return
         runCatching {
             val o = JSONObject(file.readText())
             backend = o.optString("backend", backend); localModel = o.optString("localModel", localModel)
-            threads = o.optInt("threads", threads); nCtx = o.optInt("nCtx", nCtx)
+            threads = o.optInt("threads2", threads); nCtx = o.optInt("nCtx", nCtx)
             ollamaUrl = o.optString("ollamaUrl", ollamaUrl); ollamaModel = o.optString("ollamaModel", ollamaModel)
             speak = o.optBoolean("speak", speak); handsSteps = o.optInt("handsSteps", handsSteps)
             voicePitch = o.optDouble("voicePitch", voicePitch.toDouble()).toFloat(); voiceRate = o.optDouble("voiceRate", voiceRate.toDouble()).toFloat()
@@ -34,7 +48,7 @@ class Prefs(private val file: File) {
         }
     }
 
-    fun toJson(): JSONObject = JSONObject().put("backend", backend).put("localModel", localModel).put("threads", threads)
+    fun toJson(): JSONObject = JSONObject().put("backend", backend).put("localModel", localModel).put("threads", threads).put("threads2", threads)
         .put("nCtx", nCtx).put("ollamaUrl", ollamaUrl).put("ollamaModel", ollamaModel).put("speak", speak).put("handsSteps", handsSteps)
         .put("voicePitch", voicePitch.toDouble()).put("voiceRate", voiceRate.toDouble()).put("voiceName", voiceName)
         .put("ttsEngine", ttsEngine).put("sir", sir)
@@ -45,7 +59,7 @@ class Prefs(private val file: File) {
     fun set(key: String, value: String) {
         when (key) {
             "backend" -> if (value == "local" || value == "ollama") backend = value
-            "threads" -> value.toIntOrNull()?.let { threads = it.coerceIn(1, 8) }
+            "threads" -> value.toIntOrNull()?.let { threads = it.coerceIn(0, 8) }
             "nCtx" -> value.toIntOrNull()?.let { nCtx = it.coerceIn(512, 8192) }
             "ollamaUrl" -> ollamaUrl = value.trim().trimEnd('/')
             "ollamaModel" -> ollamaModel = value.trim()

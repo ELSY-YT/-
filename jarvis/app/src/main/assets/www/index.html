@@ -156,8 +156,8 @@ progress{width:100%;height:8px;accent-color:var(--acc)}
             <button class="btn s" onclick="J.pickModel();pollModels()">📁 Выбрать .gguf</button>
             <button class="btn s r" id="cancelDl" style="display:none" onclick="J.cancelDownload()">Отменить загрузку</button>
           </div>
-          <label>Потоки процессора (обычно 4)</label>
-          <input class="in" id="threads" type="number" min="1" max="8">
+          <label>Потоки процессора (0 = авто, по быстрым ядрам)</label>
+          <input class="in" id="threads" type="number" min="0" max="8" placeholder="0 = авто">
           <label>Контекст (2048 для 4 ГБ)</label>
           <input class="in" id="nCtx" type="number" min="512" max="8192" step="512">
         </div>
