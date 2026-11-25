@@ -12,3 +12,4 @@ void rc_stop();
 void rc_unload();
 // "phase|done|total|partial text": 0 idle, 1 loading, 2 prompt, 3 answer
 std::string rc_progress();
+
