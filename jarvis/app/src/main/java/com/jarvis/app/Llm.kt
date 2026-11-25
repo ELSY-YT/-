@@ -48,7 +48,7 @@ class LocalLlm(private val p: Prefs) : Llm {
         if (p.localModel.isEmpty() || !java.io.File(p.localModel).exists())
             throw IllegalStateException("Модель не скачана. Настройки → Модель → Скачать.")
         prepare()
-        val r = LlamaBridge.generate(prompt, maxTokens, 0.6f, "", 150)
+        val r = LlamaBridge.generate(prompt, maxTokens, 0.7f, "", 150)
         if (!r.ok) throw IllegalStateException(r.text)
         return r.text
     }
@@ -68,7 +68,7 @@ class OllamaLlm(private val p: Prefs) : Llm {
     private fun call(prompt: String, maxTokens: Int, json: Boolean): String {
         val body = JSONObject().put("model", p.ollamaModel).put("prompt", prompt).put("raw", true)
             .put("stream", false).put("keep_alive", "30m")
-            .put("options", JSONObject().put("temperature", if (json) 0.0 else 0.6).put("num_predict", maxTokens).put("num_ctx", 4096)
+            .put("options", JSONObject().put("temperature", if (json) 0.0 else 0.7).put("num_predict", maxTokens).put("num_ctx", 4096)
                 .put("stop", org.json.JSONArray().put("<|im_end|>").put("<|im_start|>")))
         if (json) body.put("format", "json")
         val req = Request.Builder().url(p.ollamaUrl + "/api/generate")

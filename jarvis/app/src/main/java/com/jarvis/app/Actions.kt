@@ -204,6 +204,15 @@ class Actions(private val ctx: Context, private val store: CommandStore, private
         return "Заряд $pct%" + if (bm.isCharging) ", заряжается." else "."
     }
 
+    /** Short situation line for the chat model: "23:40, ночь, заряд 15%, заряжается". */
+    fun situation(): String = runCatching {
+        val c = java.util.Calendar.getInstance(); val h = c.get(java.util.Calendar.HOUR_OF_DAY)
+        val part = when (h) { in 5..11 -> "утро"; in 12..17 -> "день"; in 18..22 -> "вечер"; else -> "ночь" }
+        val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        SimpleDateFormat("HH:mm", Locale("ru")).format(Date()) + ", $part, " + SimpleDateFormat("EEEE", Locale("ru")).format(Date()) +
+            ", заряд ${bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)}%" + if (bm.isCharging) ", заряжается" else ""
+    }.getOrDefault("")
+
     private fun time(): String = SimpleDateFormat("'Сейчас' HH:mm, EEEE, d MMMM", Locale("ru")).format(Date())
 
     // ---------- clock ----------

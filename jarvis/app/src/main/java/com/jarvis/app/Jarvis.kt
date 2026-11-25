@@ -146,7 +146,7 @@ object Jarvis {
                     !brain.isCreate(t) && brain.deleteTarget(t) == null && brain.isChat(t) -> {
                         pending = null
                         val q = brain.clean(t)
-                        val a = brain.calm(llm().chat(brain.promptChat(q), 160))
+                        val a = brain.calm(llm().chat(brain.promptChat(q, actions.situation()), 160))
                         brain.remember(q, a)
                         say(a)
                     }
@@ -158,7 +158,7 @@ object Jarvis {
                             if (nc.steps.isEmpty()) say("Не понял, из каких действий собрать команду. Скажи, например: создай команду кино: громкость 70 и открой ютуб.")
                             else { pending = nc; emit("new_command", "cmd" to nc.toJson()); say("Сохранить команду «${nc.name}»? Скажи «да» или нажми «Сохранить».") }
                         } else {
-                            if (plan.matched != null) emit("step", "text" to "⚡ своя команда «${plan.matched}»")
+                            if (plan.matched != null) { brain.lastDone = plan.matched; emit("step", "text" to "⚡ своя команда «${plan.matched}»") }
                             actions.stopped = false
                             if (plan.steps.size > 1) notifyRunning(t)
                             actions.runAll(plan.steps, { emit("step", "text" to it) })
