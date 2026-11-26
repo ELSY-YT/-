@@ -50,9 +50,6 @@ Java_com_jarvis_app_LlamaBridge_nativeGenerate(JNIEnv *env, jobject, jbyteArray 
 JNIEXPORT void JNICALL
 Java_com_jarvis_app_LlamaBridge_nativeStop(JNIEnv *, jobject) { rc_stop(); }
 
-JNIEXPORT jbyteArray JNICALL
-Java_com_jarvis_app_LlamaBridge_nativeProgress(JNIEnv *env, jobject) { return jbytes(env, rc_progress()); }
-
 JNIEXPORT void JNICALL
 Java_com_jarvis_app_LlamaBridge_nativeUnload(JNIEnv *, jobject) { rc_unload(); }
 

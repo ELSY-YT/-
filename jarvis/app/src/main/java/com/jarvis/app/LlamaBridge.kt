@@ -13,10 +13,6 @@ object LlamaBridge {
     private external fun nativeGenerate(prompt: ByteArray, maxTokens: Int, temp: Float, grammar: String): ByteArray
     private external fun nativeStop()
     private external fun nativeUnload()
-    private external fun nativeProgress(): ByteArray
-
-    /** phase (1 loading, 2 reading prompt, 3 writing), done, total, text so far. Called from a helper thread. */
-    @Volatile var onProgress: ((Int, Int, Int, String) -> Unit)? = null
 
     @Synchronized
     fun init(nativeLibDir: String) {
@@ -38,42 +34,11 @@ object LlamaBridge {
 
     class Result(val ok: Boolean, val text: String)
 
-    /** Polls the engine every 0.6 s for the screen and stops it after timeoutSec, so nothing hangs forever. */
-    private class Watch(val timeoutSec: Int) : Thread("llm-watch") {
-        @Volatile var done = false
-        @Volatile var timedOut = false
-        init { isDaemon = true }
-        override fun run() {
-            val t0 = System.currentTimeMillis()
-            while (!done) {
-                runCatching {
-                    val s = String(nativeProgress(), Charsets.UTF_8)
-                    val f = s.split('|', limit = 4)
-                    if (f.size == 4) onProgress?.invoke(f[0].toIntOrNull() ?: 0, f[1].toIntOrNull() ?: 0, f[2].toIntOrNull() ?: 0, f[3])
-                }
-                if (timeoutSec > 0 && !timedOut && System.currentTimeMillis() - t0 > timeoutSec * 1000L) { timedOut = true; nativeStop() }
-                try { sleep(600) } catch (e: InterruptedException) { return }
-            }
-        }
-    }
-
-    /** Loads the model with progress on screen. */
-    fun ensureWatched(path: String, nCtx: Int, nThreads: Int): String? {
-        val w = Watch(0); w.start()
-        try { return ensure(path, nCtx, nThreads) } finally { w.done = true; w.interrupt() }
-    }
-
     @Synchronized
-    fun generate(prompt: String, maxTokens: Int, temp: Float, grammar: String = "", timeoutSec: Int = 0): Result {
-        val w = Watch(timeoutSec); w.start()
-        val b = try { nativeGenerate(prompt.toByteArray(Charsets.UTF_8), maxTokens, temp, grammar) } finally { w.done = true; w.interrupt() }
+    fun generate(prompt: String, maxTokens: Int, temp: Float, grammar: String = ""): Result {
+        val b = nativeGenerate(prompt.toByteArray(Charsets.UTF_8), maxTokens, temp, grammar)
         val text = String(b, 1, b.size - 1, Charsets.UTF_8)
-        val ok = b[0].toInt() == 1
-        if (w.timedOut) {
-            return if (ok && text.isNotBlank()) Result(true, text)
-            else Result(false, "Модель не успела ответить за $timeoutSec с. Телефону тяжело: выберите модель поменьше (Настройки → Модель → 1.5b) или уменьшите n_ctx до 1024.")
-        }
-        return Result(ok, text)
+        return Result(b[0].toInt() == 1, text)
     }
 
     fun stop() { if (inited) nativeStop() }

@@ -53,19 +53,11 @@ class CommandStore(private val file: File) {
     }
 
     private fun load() {
-        if (file.exists()) runCatching {
+        if (!file.exists()) { list.addAll(DEFAULTS); save(); return }
+        runCatching {
             val arr = JSONArray(file.readText())
             for (i in 0 until arr.length()) list.add(UserCommand.of(arr.getJSONObject(i)))
         }
-        // Built-in commands are added once each, also on updates; one the user deleted stays deleted.
-        val seenFile = File(file.parentFile, "builtins_seen.txt")
-        val seen = if (seenFile.exists()) seenFile.readLines().map { it.trim() }.toMutableSet() else mutableSetOf()
-        var changed = !file.exists()
-        for (d in DEFAULTS) if (d.name !in seen) {
-            if (list.none { it.name.equals(d.name, true) }) list.add(d)
-            seen.add(d.name); changed = true
-        }
-        if (changed) { save(); seenFile.writeText(seen.joinToString("\n")) }
     }
 
     private fun save() { file.parentFile?.mkdirs(); file.writeText(toJson().toString(1)) }
@@ -76,11 +68,6 @@ class CommandStore(private val file: File) {
                 listOf(Step("dnd", "on"), Step("flashlight", "off"), Step("alarm", "07:00"), Step("say", "Спокойной ночи. Будильник на 7:00."))),
             UserCommand("доброе утро", listOf("доброе утро", "я проснулся"),
                 listOf(Step("dnd", "off"), Step("time", ""), Step("battery", ""))),
-            UserCommand("игровой режим", listOf("игровой режим", "включи игровой режим"),
-                listOf(Step("say", "Запускаю, сэр"), Step("dnd", "on"), Step("brightness", "100"), Step("battery", ""),
-                    Step("time", ""), Step("volume", "100"), Step("wait", "9"), Step("open_app", "Звук"),
-                    Step("media", "play"), Step("wait", "3"), Step("screen", "home"), Step("wait", "1"),
-                    Step("open_app", "Minecraft"), Step("wait", "3"), Step("say", "Удачной игры, сэр"))),
         )
     }
 }
@@ -316,34 +303,24 @@ ${actionList()}${commandList()}"""
     // ---------- free conversation ----------
 
     private val SYS_CHAT = """Ты Джарвис, ИИ-дворецкий из фильмов про Железного человека, живёшь в телефоне пользователя.
-Говоришь спокойно и вежливо, как воспитанный английский дворецкий, обращаешься к пользователю «сэр».
-У тебя тонкий сухой юмор: шутишь по ситуации, если есть повод (поздний час, мало заряда, игра, работа, странная просьба), иронично, но по-доброму и без фамильярности. Не шути, если человек расстроен или спрашивает что-то серьёзное.
-Отвечай гибко и живо: не повторяй одни и те же фразы, подстраивайся под тон собеседника, можешь задать встречный вопрос.
-Перед вопросом в квадратных скобках дана обстановка (время, заряд, что ты только что сделал). Используй её, только если это к месту, и не пересказывай её.
-Отвечаешь по-русски, коротко: одно-три предложения, твой ответ читают вслух. Без списков, разметки, восклицательных знаков и смайликов.
+Говоришь спокойно, вежливо и неторопливо, как воспитанный английский дворецкий. Обращаешься к пользователю «сэр».
+Немного сухого юмора уместно, но без фамильярности. Никогда не повышаешь тон, не используешь восклицательные знаки и смайлики.
+Отвечаешь по-русски, коротко: одно-три предложения, потому что твой ответ читают вслух. Без списков и разметки.
 Если не знаешь ответа, честно говоришь об этом. Если просят что-то сделать на телефоне, вежливо предложи сказать это командой."""
 
     private val history = ArrayDeque<Pair<String, String>>()   // last exchanges, kept only in memory
 
     @Synchronized fun forget() = history.clear()
 
-    @Volatile var lastDone = ""   // the last command Jarvis ran, for situational remarks
-
-    private val SHOTS = listOf(
-        "[02:14, ночь, заряд 12%] привет" to "Доброй ночи, сэр. Отмечу, что батарея сдаётся раньше вас, двенадцать процентов. Чем могу помочь?",
-        "[18:30, вечер, заряд 80%, только что: игровой режим] как дела" to "Всё в порядке, сэр, системы готовы к бою. Надеюсь, криперы сегодня будут к вам снисходительны.",
-        "[10:05, утро, заряд 64%] мне грустно" to "Мне жаль это слышать, сэр. Хотите рассказать, что случилось, или включить что-нибудь спокойное?",
-    )
-
-    fun promptChat(user: String, situation: String = ""): String {
+    fun promptChat(user: String): String {
         val sb = StringBuilder()
         sb.append("<|im_start|>system\n").append(SYS_CHAT).append("<|im_end|>\n")
-        for ((u, a) in SHOTS + history) {
+        val shots = if (history.isEmpty()) listOf("привет" to "Добрый день, сэр. Все системы в норме. Чем могу быть полезен?") else emptyList()
+        for ((u, a) in shots + history) {
             sb.append("<|im_start|>user\n").append(u).append("<|im_end|>\n")
             sb.append("<|im_start|>assistant\n").append(a).append("<|im_end|>\n")
         }
-        val sit = if (situation.isNotBlank()) "[$situation${if (lastDone.isNotBlank()) ", только что: $lastDone" else ""}] " else ""
-        sb.append("<|im_start|>user\n").append(sit).append(user).append("<|im_end|>\n<|im_start|>assistant\n")
+        sb.append("<|im_start|>user\n").append(user).append("<|im_end|>\n<|im_start|>assistant\n")
         return sb.toString()
     }
 

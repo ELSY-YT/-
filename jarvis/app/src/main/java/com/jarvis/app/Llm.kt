@@ -15,31 +15,11 @@ interface Llm {
 }
 
 class LocalLlm(private val p: Prefs) : Llm {
-    companion object {
-        @Volatile private var warned: String? = null
-
-        /** Total RAM in bytes from /proc/meminfo, 0 if unknown. */
-        fun totalRam(): Long = runCatching {
-            java.io.File("/proc/meminfo").readLines().first { it.startsWith("MemTotal") }
-                .filter { it.isDigit() }.toLong() * 1024
-        }.getOrDefault(0L)
-    }
-
-    /** Loads the model (with progress) and warns once if it is too big for this phone's memory. */
-    private fun prepare() {
-        val f = java.io.File(p.localModel)
-        val ram = totalRam()
-        if (ram > 0 && f.length() > ram * 0.4 && warned != p.localModel) {
-            warned = p.localModel
-            LlamaBridge.onProgress?.invoke(-1, (f.length() shr 20).toInt(), (ram shr 20).toInt(), "")
-        }
-        LlamaBridge.ensureWatched(p.localModel, p.nCtx, p.effThreads())?.let { throw IllegalStateException(it) }
-    }
     override fun gen(prompt: String, grammar: String, maxTokens: Int): String {
         if (p.localModel.isEmpty() || !java.io.File(p.localModel).exists())
             throw IllegalStateException("Модель не скачана. Настройки → Модель → Скачать.")
-        prepare()
-        val r = LlamaBridge.generate(prompt, maxTokens, 0f, grammar, 150)
+        LlamaBridge.ensure(p.localModel, p.nCtx, p.threads)?.let { throw IllegalStateException(it) }
+        val r = LlamaBridge.generate(prompt, maxTokens, 0f, grammar)
         if (!r.ok) throw IllegalStateException(r.text)
         return r.text
     }
@@ -47,8 +27,8 @@ class LocalLlm(private val p: Prefs) : Llm {
     override fun chat(prompt: String, maxTokens: Int): String {
         if (p.localModel.isEmpty() || !java.io.File(p.localModel).exists())
             throw IllegalStateException("Модель не скачана. Настройки → Модель → Скачать.")
-        prepare()
-        val r = LlamaBridge.generate(prompt, maxTokens, 0.7f, "", 150)
+        LlamaBridge.ensure(p.localModel, p.nCtx, p.threads)?.let { throw IllegalStateException(it) }
+        val r = LlamaBridge.generate(prompt, maxTokens, 0.6f, "")
         if (!r.ok) throw IllegalStateException(r.text)
         return r.text
     }
@@ -68,7 +48,7 @@ class OllamaLlm(private val p: Prefs) : Llm {
     private fun call(prompt: String, maxTokens: Int, json: Boolean): String {
         val body = JSONObject().put("model", p.ollamaModel).put("prompt", prompt).put("raw", true)
             .put("stream", false).put("keep_alive", "30m")
-            .put("options", JSONObject().put("temperature", if (json) 0.0 else 0.7).put("num_predict", maxTokens).put("num_ctx", 4096)
+            .put("options", JSONObject().put("temperature", if (json) 0.0 else 0.6).put("num_predict", maxTokens).put("num_ctx", 4096)
                 .put("stop", org.json.JSONArray().put("<|im_end|>").put("<|im_start|>")))
         if (json) body.put("format", "json")
         val req = Request.Builder().url(p.ollamaUrl + "/api/generate")
